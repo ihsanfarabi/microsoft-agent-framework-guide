@@ -3,7 +3,7 @@ using P01.HelloAgent;
 
 // Start OTel tracing first so the provider is listening before any model call.
 // Disposed on exit, which flushes the spans to the console exporter.
-using var telemetry = Telemetry.Start();
+using var telemetry = Telemetry.Start("P01.HelloAgent");
 
 var agent = FaqBot.Create("You are HelpDeskHQ's FAQ bot. Answer IT questions in one short paragraph.");
 

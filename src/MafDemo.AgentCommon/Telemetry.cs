@@ -18,9 +18,9 @@ public static class Telemetry
     public const string SourceName = "Experimental.Microsoft.Agents.AI";
 
     /// <summary>Builds and starts the trace provider. Dispose to flush spans.</summary>
-    public static TracerProvider Start() =>
+    public static TracerProvider Start(string serviceName) =>
         Sdk.CreateTracerProviderBuilder()
-            .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("P01.HelloAgent"))
+            .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
             .AddSource(SourceName)
             .AddConsoleExporter()
             .Build();

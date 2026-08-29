@@ -35,4 +35,35 @@ public class TicketToolFunctionsTests
         var result = await f.UpdateTicketStatusAsync(Guid.NewGuid().ToString(), "Resolved");
         Assert.Contains("not found", result.ToLower());
     }
+
+    [Fact]
+    public async Task AddTicketNote_invalid_guid_says_invalid_id()
+    {
+        var f = new TicketToolFunctions(new InMemoryTicketStore());
+        var result = await f.AddTicketNoteAsync("not-a-guid", "some note");
+        Assert.Contains("Invalid id", result);
+    }
+
+    [Fact]
+    public async Task AddTicketNote_unknown_id_says_not_found()
+    {
+        var f = new TicketToolFunctions(new InMemoryTicketStore());
+        var result = await f.AddTicketNoteAsync(Guid.NewGuid().ToString(), "some note");
+        Assert.Contains("not found", result.ToLower());
+    }
+
+    [Fact]
+    public async Task AddTicketNote_happy_path_persists_note_via_store()
+    {
+        var store = new InMemoryTicketStore();
+        var f = new TicketToolFunctions(store);
+        var ticket = await store.CreateAsync("VPN", "d", TicketPriority.High);
+
+        var result = await f.AddTicketNoteAsync(ticket.Id.ToString(), "user rebooted router");
+
+        Assert.Contains("Note added", result);
+        var roundTripped = await store.GetAsync(ticket.Id);
+        Assert.NotNull(roundTripped);
+        Assert.Contains("user rebooted router", roundTripped!.Notes);
+    }
 }
