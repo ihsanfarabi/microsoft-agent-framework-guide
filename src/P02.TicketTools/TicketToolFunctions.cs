@@ -1,6 +1,8 @@
 using MafDemo.Core.Domain;
 using MafDemo.Core.Stores;
 
+namespace P02.TicketTools;
+
 public class TicketToolFunctions(ITicketStore store)
 {
     public async Task<string> CreateTicketAsync(string title, string description, string priority)

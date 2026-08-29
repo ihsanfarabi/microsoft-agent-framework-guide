@@ -3,6 +3,8 @@ using MafDemo.Core.Stores;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
+namespace P02.TicketTools;
+
 /// <summary>
 /// HelpDeskHQ ticket agent: a <see cref="ChatClientAgent"/> wired to Ollama
 /// (via the shared <see cref="OllamaChat"/> factory, so tracing and config

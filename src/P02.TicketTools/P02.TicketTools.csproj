@@ -18,4 +18,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Ships appsettings.json next to the binary so OllamaChat can read it. -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

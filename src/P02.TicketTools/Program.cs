@@ -4,6 +4,7 @@ using MafDemo.Core.Stores;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
+using P02.TicketTools;
 
 // Start OTel tracing first so the provider is listening before any model call.
 // Disposed on exit, which flushes the spans to the console exporter.

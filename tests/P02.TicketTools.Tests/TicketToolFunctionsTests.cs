@@ -1,5 +1,6 @@
 using MafDemo.Core.Domain;
 using MafDemo.Core.Stores;
+using P02.TicketTools;
 
 public class TicketToolFunctionsTests
 {
@@ -34,6 +35,21 @@ public class TicketToolFunctionsTests
         var f = new TicketToolFunctions(new InMemoryTicketStore());
         var result = await f.UpdateTicketStatusAsync(Guid.NewGuid().ToString(), "Resolved");
         Assert.Contains("not found", result.ToLower());
+    }
+
+    [Fact]
+    public async Task UpdateTicketStatus_happy_path_persists_status_via_store()
+    {
+        var store = new InMemoryTicketStore();
+        var f = new TicketToolFunctions(store);
+        var ticket = await store.CreateAsync("VPN", "d", TicketPriority.High);
+
+        var result = await f.UpdateTicketStatusAsync(ticket.Id.ToString(), "Resolved");
+
+        Assert.Contains("Resolved", result);
+        var roundTripped = await store.GetAsync(ticket.Id);
+        Assert.NotNull(roundTripped);
+        Assert.Equal(TicketStatus.Resolved, roundTripped!.Status);
     }
 
     [Fact]
