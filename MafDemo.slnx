@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MafDemo.Core/MafDemo.Core.csproj" />
+    <Project Path="src/P01.HelloAgent/P01.HelloAgent.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
