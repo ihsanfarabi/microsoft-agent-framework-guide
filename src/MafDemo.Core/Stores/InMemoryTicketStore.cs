@@ -46,10 +46,14 @@ public class InMemoryTicketStore : ITicketStore
         return Task.FromResult<Ticket?>(updated);
     }
 
-    public Task AddNoteAsync(Guid id, string note)
+    public Task<bool> AddNoteAsync(Guid id, string note)
     {
-        var ticket = _tickets[id];
+        if (!_tickets.TryGetValue(id, out var ticket))
+        {
+            return Task.FromResult(false);
+        }
+
         _tickets[id] = ticket with { Notes = [.. ticket.Notes, note] };
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 }

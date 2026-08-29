@@ -8,5 +8,6 @@ public interface ITicketStore
     Task<Ticket?> GetAsync(Guid id);
     Task<IReadOnlyList<Ticket>> ListAsync();
     Task<Ticket?> UpdateStatusAsync(Guid id, TicketStatus status);
-    Task AddNoteAsync(Guid id, string note);
+    /// <summary>Returns false if the ticket id is unknown (no throw).</summary>
+    Task<bool> AddNoteAsync(Guid id, string note);
 }

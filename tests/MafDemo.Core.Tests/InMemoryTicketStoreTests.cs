@@ -23,6 +23,14 @@ public class InMemoryTicketStoreTests
     }
 
     [Fact]
+    public async Task AddNoteAsync_on_missing_id_returns_false()
+    {
+        var store = new InMemoryTicketStore();
+        var result = await store.AddNoteAsync(Guid.NewGuid(), "note");
+        Assert.False(result);
+    }
+
+    [Fact]
     public async Task UpdateStatus_persists()
     {
         var store = new InMemoryTicketStore();
