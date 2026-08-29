@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MafDemo.AgentCommon;
 using MafDemo.Core.Handbook;
 using P04.HandbookRag;
@@ -19,11 +20,18 @@ await retriever.BuildAsync(chunks);
 Console.WriteLine($"indexed {chunks.Count} chunks from {corpus.FullName}");
 
 // agent.RunAsync returns AgentResponse; the response object is not the text.
-var agent = HandbookBot.Create(retriever);
+// Both variants share the same retriever/index; only the grounding mechanism
+// differs — provider agent: chunks auto-injected every turn; tool agent: the
+// model must choose to call search_handbook.
+var providerAgent = HandbookBot.Create(retriever);
+var toolFunctions = new HandbookToolFunctions(retriever);
+var toolAgent = HandbookBot.CreateToolVariant(toolFunctions);
 
 // Task 4 guardrail scenarios: two grounded questions (different docs) plus
 // one question the handbook cannot answer — the third must trip the
 // "That is not in the handbook." fallback rather than a hallucination.
+// Task 5 runs each through BOTH variants; SearchCount and the stopwatch give
+// the raw comparison data recorded in docs/projects/04-handbook-rag/NOTES.md.
 var scenarios = new[]
 {
     "How many vacation days do I get?",
@@ -33,8 +41,19 @@ var scenarios = new[]
 foreach (var question in scenarios)
 {
     Console.WriteLine($"user> {question}");
-    var response = await agent.RunAsync(question);
-    Console.WriteLine($"bot> {response.Text}");
+
+    var providerWatch = Stopwatch.StartNew();
+    var providerResponse = await providerAgent.RunAsync(question);
+    providerWatch.Stop();
+    Console.WriteLine($"provider-bot> {providerResponse.Text}");
+    Console.WriteLine($"  (provider agent: {providerWatch.ElapsedMilliseconds} ms, top-3 auto-injected)");
+
+    toolFunctions.ResetSearchCount();
+    var toolWatch = Stopwatch.StartNew();
+    var toolResponse = await toolAgent.RunAsync(question);
+    toolWatch.Stop();
+    Console.WriteLine($"tool-bot> {toolResponse.Text}");
+    Console.WriteLine($"  (tool agent: {toolWatch.ElapsedMilliseconds} ms, search_handbook calls: {toolFunctions.SearchCount})");
     Console.WriteLine();
 }
 
