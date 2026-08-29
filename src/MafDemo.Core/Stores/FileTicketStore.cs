@@ -5,8 +5,9 @@ namespace MafDemo.Core.Stores;
 
 /// <summary>
 /// JSON-file-backed <see cref="ITicketStore"/> implementation.
-/// Loads existing tickets on construction (missing file = starts empty) and
-/// rewrites the whole file after each mutation. Single-threaded demo store — no locking.
+/// Loads existing tickets on construction (missing file = starts empty; corrupt
+/// file = moved to <c>.corrupt</c> and starts empty) and rewrites the whole file
+/// after each mutation. Single-threaded demo store — no locking.
 /// </summary>
 public class FileTicketStore(string path) : ITicketStore
 {
@@ -16,12 +17,31 @@ public class FileTicketStore(string path) : ITicketStore
     private static Dictionary<Guid, Ticket> Load(string p)
     {
         if (!File.Exists(p)) return [];
-        var list = JsonSerializer.Deserialize<List<Ticket>>(File.ReadAllText(p)) ?? [];
-        return list.ToDictionary(t => t.Id);
+        try
+        {
+            var list = JsonSerializer.Deserialize<List<Ticket>>(File.ReadAllText(p)) ?? [];
+            return list.ToDictionary(t => t.Id);
+        }
+        catch (JsonException)
+        {
+            // Corrupt file (e.g. a crash mid-write before atomic saves existed):
+            // preserve the bad data as <path>.corrupt so the user can inspect it,
+            // but start empty rather than throwing from the ctor and bricking
+            // every P04+ project that constructs this store.
+            File.Move(p, p + ".corrupt", overwrite: true);
+            return [];
+        }
     }
 
-    private void Save() =>
-        File.WriteAllText(path, JsonSerializer.Serialize(_tickets.Values.ToList(), Json));
+    private void Save()
+    {
+        // Atomic write: serialize into a sibling temp file, then Move over the
+        // real path. A crash mid-write leaves the previous file intact instead
+        // of a truncated tickets.json that would brick the next startup.
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(_tickets.Values.ToList(), Json));
+        File.Move(tmp, path, overwrite: true);
+    }
 
     public Task<Ticket> CreateAsync(string title, string description, TicketPriority priority)
     {

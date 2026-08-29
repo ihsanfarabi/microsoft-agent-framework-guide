@@ -45,4 +45,17 @@ public class FileTicketStoreTests
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
         Assert.False(await new FileTicketStore(path).AddNoteAsync(Guid.NewGuid(), "x"));
     }
+
+    [Fact]
+    public async Task Corrupt_file_starts_empty_instead_of_throwing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        File.WriteAllText(path, "{ not json");
+
+        var store = new FileTicketStore(path);       // must not throw
+        Assert.Empty(await store.ListAsync());
+        // The corrupt data is preserved, not silently destroyed.
+        Assert.True(File.Exists(path + ".corrupt"));
+        File.Delete(path + ".corrupt");
+    }
 }

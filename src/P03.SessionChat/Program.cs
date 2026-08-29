@@ -8,8 +8,8 @@ using P03.SessionChat;
 // Disposed on exit, which flushes the spans to the console exporter.
 using var telemetry = Telemetry.Start("P03.SessionChat");
 
-// Runtime state in the working directory (gitignored). Carried note: a corrupt
-// tickets.json throws JsonException from the store ctor — demo-acceptable.
+// Runtime state in the working directory (gitignored). A corrupt tickets.json
+// is preserved as tickets.json.corrupt and the store starts empty.
 var store = new FileTicketStore("tickets.json");
 var agent = TicketBot.Create(store);
 
@@ -40,7 +40,7 @@ while (true)
     {
         // threads/ is Task 3's persistence directory; it may not exist yet.
         var files = Directory.Exists("threads")
-            ? Directory.GetFiles("threads").Select(Path.GetFileNameWithoutExtension).ToList()
+            ? Directory.GetFiles("threads", "*.json").Select(Path.GetFileNameWithoutExtension).ToList()
             : [];
         Console.WriteLine(files.Count == 0 ? "(none)" : string.Join("\n", files));
         continue;
@@ -76,8 +76,16 @@ while (true)
     var response = await agent.RunAsync(text, session);
     Console.WriteLine($"bot> {response.Text}");
     // Persist after every turn so the conversation survives a process restart
-    // (and so /list reflects what /switch can actually restore).
-    await SessionPersistence.SaveAsync(agent, session, sessionId);
+    // (and so /list reflects what /switch can actually restore). A failed save
+    // (disk full, unwritable threads/) must not kill the REPL — warn and continue.
+    try
+    {
+        await SessionPersistence.SaveAsync(agent, session, sessionId);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"warn: could not save session ({ex.Message})");
+    }
 }
 
 // Session ids we mint are Guid.NewGuid().ToString("N")[..8]: exactly 8 chars
