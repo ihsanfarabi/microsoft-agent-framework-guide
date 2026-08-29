@@ -5,6 +5,7 @@
     <Project Path="src/P01.HelloAgent/P01.HelloAgent.csproj" />
     <Project Path="src/P02.TicketTools/P02.TicketTools.csproj" />
     <Project Path="src/P03.SessionChat/P03.SessionChat.csproj" />
+    <Project Path="src/P04.HandbookRag/P04.HandbookRag.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />

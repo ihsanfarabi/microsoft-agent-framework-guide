@@ -40,8 +40,10 @@ public static class OllamaChat
     /// Precedence: environment variable, then appsettings.json, then fallback.
     /// A whitespace-only env value counts as unset — "" would otherwise slip
     /// past a null check and crash <see cref="Uri"/> construction.
+    /// Internal so other factories in this assembly (e.g. <see cref="OllamaEmbedding"/>)
+    /// resolve config through the same chain instead of duplicating it.
     /// </summary>
-    private static string Resolve(string envVar, string configKey, string fallback)
+    internal static string Resolve(string envVar, string configKey, string fallback)
     {
         var env = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(env))
