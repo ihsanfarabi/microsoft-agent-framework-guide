@@ -54,6 +54,12 @@ while (true)
         {
             Console.WriteLine("usage: /switch <id>  (ids: /list)");
         }
+        else if (!IsValidSessionId(id))
+        {
+            // Session ids are 8-char lowercase hex; anything else would let an
+            // unsanitized id reach the file system (e.g. "../x" path traversal).
+            Console.WriteLine("unknown session id");
+        }
         else if (!File.Exists(Path.Combine("threads", $"{id}.json")))
         {
             Console.WriteLine($"no saved session {id}  (ids: /list)");
@@ -73,3 +79,8 @@ while (true)
     // (and so /list reflects what /switch can actually restore).
     await SessionPersistence.SaveAsync(agent, session, sessionId);
 }
+
+// Session ids we mint are Guid.NewGuid().ToString("N")[..8]: exactly 8 chars
+// of [0-9a-f]. Enforcing that shape keeps /switch ids from escaping threads/.
+static bool IsValidSessionId(string id) =>
+    id.Length == 8 && id.All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
