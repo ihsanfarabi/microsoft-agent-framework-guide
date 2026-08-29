@@ -1,3 +1,4 @@
+using MafDemo.AgentCommon;
 using P01.HelloAgent;
 
 // Start OTel tracing first so the provider is listening before any model call.

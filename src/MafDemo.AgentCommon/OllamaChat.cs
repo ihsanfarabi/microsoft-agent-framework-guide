@@ -2,7 +2,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using OllamaSharp;
 
-namespace P01.HelloAgent;
+namespace MafDemo.AgentCommon;
 
 /// <summary>
 /// Factory for an Ollama-backed <see cref="IChatClient"/>.

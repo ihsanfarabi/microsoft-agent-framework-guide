@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/MafDemo.AgentCommon/MafDemo.AgentCommon.csproj" />
     <Project Path="src/MafDemo.Core/MafDemo.Core.csproj" />
     <Project Path="src/P01.HelloAgent/P01.HelloAgent.csproj" />
+    <Project Path="src/P02.TicketTools/P02.TicketTools.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
+    <Project Path="tests/P02.TicketTools.Tests/P02.TicketTools.Tests.csproj" />
   </Folder>
 </Solution>

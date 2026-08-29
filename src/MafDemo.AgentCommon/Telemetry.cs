@@ -2,7 +2,7 @@ using OpenTelemetry;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
-namespace P01.HelloAgent;
+namespace MafDemo.AgentCommon;
 
 /// <summary>
 /// OpenTelemetry wiring for the console agent: a <see cref="TracerProvider"/>
