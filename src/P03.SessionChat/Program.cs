@@ -2,6 +2,7 @@ using MafDemo.AgentCommon;
 using MafDemo.Core.Stores;
 using Microsoft.Agents.AI;
 using P02.TicketTools;
+using P03.SessionChat;
 
 // Start OTel tracing first so the provider is listening before any model call.
 // Disposed on exit, which flushes the spans to the console exporter.
@@ -45,12 +46,30 @@ while (true)
         continue;
     }
 
-    if (text.StartsWith("/switch ", StringComparison.Ordinal))
+    if (text.StartsWith("/switch", StringComparison.Ordinal))
     {
-        Console.WriteLine("not implemented until Task 3");
+        // Bare "/switch" (no id) is a usage error, not a prompt for the agent.
+        var id = text["/switch".Length..].Trim();
+        if (id.Length == 0)
+        {
+            Console.WriteLine("usage: /switch <id>  (ids: /list)");
+        }
+        else if (!File.Exists(Path.Combine("threads", $"{id}.json")))
+        {
+            Console.WriteLine($"no saved session {id}  (ids: /list)");
+        }
+        else
+        {
+            session = await SessionPersistence.LoadAsync(agent, id);
+            sessionId = id;
+            Console.WriteLine($"switched to session {sessionId}");
+        }
         continue;
     }
 
     var response = await agent.RunAsync(text, session);
     Console.WriteLine($"bot> {response.Text}");
+    // Persist after every turn so the conversation survives a process restart
+    // (and so /list reflects what /switch can actually restore).
+    await SessionPersistence.SaveAsync(agent, session, sessionId);
 }
