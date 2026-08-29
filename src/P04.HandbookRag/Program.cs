@@ -20,8 +20,23 @@ Console.WriteLine($"indexed {chunks.Count} chunks from {corpus.FullName}");
 
 // agent.RunAsync returns AgentResponse; the response object is not the text.
 var agent = HandbookBot.Create(retriever);
-var response = await agent.RunAsync("How many vacation days do I get?");
-Console.WriteLine($"bot> {response.Text}");
+
+// Task 4 guardrail scenarios: two grounded questions (different docs) plus
+// one question the handbook cannot answer — the third must trip the
+// "That is not in the handbook." fallback rather than a hallucination.
+var scenarios = new[]
+{
+    "How many vacation days do I get?",
+    "When must an RMA be filed?",
+    "What is the CEO's home address?",
+};
+foreach (var question in scenarios)
+{
+    Console.WriteLine($"user> {question}");
+    var response = await agent.RunAsync(question);
+    Console.WriteLine($"bot> {response.Text}");
+    Console.WriteLine();
+}
 
 // dotnet run executes from bin/Debug/net10.0, so the repo root's docs/corpus
 // is several levels above the working directory. Walk up from the binary
