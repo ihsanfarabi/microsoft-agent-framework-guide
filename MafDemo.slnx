@@ -9,6 +9,7 @@
     <Project Path="src/P05.GuardrailMiddleware/P05.GuardrailMiddleware.csproj" />
     <Project Path="src/P06.TriageComposition/P06.TriageComposition.csproj" />
     <Project Path="src/P07.ResolutionWorkflow/P07.ResolutionWorkflow.csproj" />
+    <Project Path="src/P08.HarnessAgent/P08.HarnessAgent.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
@@ -16,5 +17,6 @@
     <Project Path="tests/P05.GuardrailMiddleware.Tests/P05.GuardrailMiddleware.Tests.csproj" />
     <Project Path="tests/P06.TriageComposition.Tests/P06.TriageComposition.Tests.csproj" />
     <Project Path="tests/P07.ResolutionWorkflow.Tests/P07.ResolutionWorkflow.Tests.csproj" />
+    <Project Path="tests/P08.HarnessAgent.Tests/P08.HarnessAgent.Tests.csproj" />
   </Folder>
 </Solution>
