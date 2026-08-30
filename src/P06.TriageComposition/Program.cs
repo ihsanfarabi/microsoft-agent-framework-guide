@@ -3,6 +3,8 @@ using MafDemo.Core.Domain;
 using MafDemo.Core.Handbook;
 using MafDemo.Core.Stores;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
 using P04.HandbookRag;
 using P06.TriageComposition;
 
@@ -32,13 +34,11 @@ var seeded = await store.CreateAsync(
     TicketPriority.High);
 Console.WriteLine($"seeded ticket {seeded.Id}");
 
-// Task 2: agents-as-tools triage. One front-desk TriageAgent; the specialists
-// are its named function tools (network_connectivity / software_support /
-// hardware_support) and pick their own tools per Task 1. Smoke scenarios ask
-// exactly one question per specialist — expect every answer prefixed by which
-// specialist handled it.
+// Task 3: triage via handoff orchestration (default mode) — or `as-tools` to
+// rerun the Task 2 composition for the trace comparison. Both scenarios use
+// the same three questions; handoff runs each as one interactive conversation.
+var mode = args.FirstOrDefault(a => a is "as-tools" or "handoff") ?? "handoff";
 var tools = new SpecialistTools(store, retriever);
-var triage = TriageAsTools.Create(tools);
 
 var scenarios = new (string Label, string Prompt)[]
 {
@@ -47,14 +47,84 @@ var scenarios = new (string Label, string Prompt)[]
     ("hardware", "Laptop won't charge"),
 };
 
-foreach (var (label, prompt) in scenarios)
+if (mode == "as-tools")
 {
-    Console.WriteLine();
-    Console.WriteLine($"=== {label} ===");
-    Console.WriteLine($"user> {prompt}");
-    var response = await triage.RunAsync(prompt);
-    Console.WriteLine("triage>");
-    Console.WriteLine(response.Text);
+    // Task 2: agents-as-tools triage. One front-desk TriageAgent; the
+    // specialists are its named function tools (network_connectivity /
+    // software_support / hardware_support) and pick their own tools per Task 1.
+    // Smoke scenarios ask exactly one question per specialist — expect every
+    // answer prefixed by which specialist handled it.
+    var triage = TriageAsTools.Create(tools);
+
+    foreach (var (label, prompt) in scenarios)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"=== {label} ===");
+        Console.WriteLine($"user> {prompt}");
+        var response = await triage.RunAsync(prompt);
+        Console.WriteLine("triage>");
+        Console.WriteLine(response.Text);
+    }
+}
+else
+{
+    // Task 3: handoff workflow. Interactive per the MAF handoff doc: a run
+    // ends when the holding agent answers WITHOUT a handoff tool call, control
+    // returns to the caller, and the next user turn is fed by appending to the
+    // conversation and running again. Each scripted scenario is one
+    // conversation: one user question, then the workflow loop runs until an
+    // agent finishes its turn — whoever answered last "holds" the conversation.
+    var workflow = TriageHandoff.Create(tools);
+
+    foreach (var (label, prompt) in scenarios)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"=== {label} (handoff) ===");
+
+        var messages = new List<ChatMessage> { new(ChatRole.User, prompt) };
+        string? holdingAgent = null;
+
+        while (true)
+        {
+            await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+            await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+            string? lastExecutorId = null;
+            List<ChatMessage> newMessages = [];
+            await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+            {
+                if (evt is AgentResponseUpdateEvent update)
+                {
+                    if (update.ExecutorId != lastExecutorId)
+                    {
+                        lastExecutorId = update.ExecutorId;
+                        Console.WriteLine();
+                        Console.WriteLine($"{update.ExecutorId}>");
+                    }
+
+                    Console.Write(update.Update.Text);
+                }
+                else if (evt is WorkflowOutputEvent output)
+                {
+                    newMessages = output.As<List<ChatMessage>>()!;
+                    break;
+                }
+            }
+
+            // Control is back with the caller: merge the agents' messages into
+            // the conversation, note who answered last, and take the next user
+            // turn. The scripted scenarios provide only the opening question,
+            // so the conversation closes here with that agent holding it.
+            messages.AddRange(newMessages.Skip(messages.Count));
+            holdingAgent = newMessages.LastOrDefault(m => m.Role == ChatRole.Assistant) is { } last
+                ? (last.AuthorName ?? lastExecutorId ?? "?")
+                : lastExecutorId;
+            break;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"held by: {holdingAgent}");
+    }
 }
 
 // dotnet run executes from bin/Debug/net10.0, so docs/corpus is several
