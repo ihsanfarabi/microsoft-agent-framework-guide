@@ -38,6 +38,9 @@ Console.WriteLine($"seeded ticket {seeded.Id}");
 // rerun the Task 2 composition for the trace comparison. Both scenarios use
 // the same three questions; handoff runs each as one interactive conversation.
 var mode = args.FirstOrDefault(a => a is "as-tools" or "handoff") ?? "handoff";
+Console.WriteLine($"mode: {mode}");
+if (args.Length > 0 && !args.Contains(mode))
+    Console.WriteLine($"(ignored unknown arg(s) — pass \"handoff\" or \"as-tools\")");
 var tools = new SpecialistTools(store, retriever);
 
 var scenarios = new (string Label, string Prompt)[]
@@ -82,45 +85,41 @@ else
         Console.WriteLine($"=== {label} (handoff) ===");
 
         var messages = new List<ChatMessage> { new(ChatRole.User, prompt) };
-        string? holdingAgent = null;
 
-        while (true)
+        await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+        await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+        string? lastExecutorId = null;
+        List<ChatMessage> newMessages = [];
+        await foreach (WorkflowEvent evt in run.WatchStreamAsync())
         {
-            await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
-            await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
-
-            string? lastExecutorId = null;
-            List<ChatMessage> newMessages = [];
-            await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+            if (evt is AgentResponseUpdateEvent update)
             {
-                if (evt is AgentResponseUpdateEvent update)
+                if (update.ExecutorId != lastExecutorId)
                 {
-                    if (update.ExecutorId != lastExecutorId)
-                    {
-                        lastExecutorId = update.ExecutorId;
-                        Console.WriteLine();
-                        Console.WriteLine($"{update.ExecutorId}>");
-                    }
+                    lastExecutorId = update.ExecutorId;
+                    Console.WriteLine();
+                    Console.WriteLine($"{update.ExecutorId}>");
+                }
 
-                    Console.Write(update.Update.Text);
-                }
-                else if (evt is WorkflowOutputEvent output)
-                {
-                    newMessages = output.As<List<ChatMessage>>()!;
-                    break;
-                }
+                Console.Write(update.Update.Text);
             }
-
-            // Control is back with the caller: merge the agents' messages into
-            // the conversation, note who answered last, and take the next user
-            // turn. The scripted scenarios provide only the opening question,
-            // so the conversation closes here with that agent holding it.
-            messages.AddRange(newMessages.Skip(messages.Count));
-            holdingAgent = newMessages.LastOrDefault(m => m.Role == ChatRole.Assistant) is { } last
-                ? (last.AuthorName ?? lastExecutorId ?? "?")
-                : lastExecutorId;
-            break;
+            else if (evt is WorkflowOutputEvent output)
+            {
+                newMessages = output.As<List<ChatMessage>>()!;
+                break;
+            }
         }
+
+        // Control is back with the caller: merge the agents' messages into the
+        // conversation, note who answered last, and take the next user turn.
+        // The scripted scenarios provide only the opening question, so the
+        // conversation closes here with that agent holding it; appending
+        // further user turns here is what would make it multi-turn.
+        messages.AddRange(newMessages.Skip(messages.Count));
+        var holdingAgent = newMessages.LastOrDefault(m => m.Role == ChatRole.Assistant) is { } last
+            ? (last.AuthorName ?? lastExecutorId ?? "?")
+            : lastExecutorId;
 
         Console.WriteLine();
         Console.WriteLine($"held by: {holdingAgent}");
