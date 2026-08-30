@@ -32,27 +32,29 @@ var seeded = await store.CreateAsync(
     TicketPriority.High);
 Console.WriteLine($"seeded ticket {seeded.Id}");
 
+// Task 2: agents-as-tools triage. One front-desk TriageAgent; the specialists
+// are its named function tools (network_connectivity / software_support /
+// hardware_support) and pick their own tools per Task 1. Smoke scenarios ask
+// exactly one question per specialist — expect every answer prefixed by which
+// specialist handled it.
 var tools = new SpecialistTools(store, retriever);
+var triage = TriageAsTools.Create(tools);
 
-// Smoke scenarios: one prompt per specialist. Network/Hardware questions are
-// handbook facts; the software question must round-trip through get_ticket.
-var scenarios = new (string Label, ChatClientAgent Agent, string Prompt)[]
+var scenarios = new (string Label, string Prompt)[]
 {
-    ("network", Specialists.NetworkSpecialist(tools),
-        "My VPN connection drops every few hours and asks for login again. What should I do?"),
-    ("software", Specialists.SoftwareSpecialist(tools),
-        $"What is the status of ticket {seeded.Id}?"),
-    ("hardware", Specialists.HardwareSpecialist(tools),
-        "The office printer shows an offline status and nothing prints. What does the handbook say I should check?"),
+    ("network", "My Wi-Fi drops every 5 minutes"),
+    ("software", "Excel crashes on open"),
+    ("hardware", "Laptop won't charge"),
 };
 
-foreach (var (label, agent, prompt) in scenarios)
+foreach (var (label, prompt) in scenarios)
 {
     Console.WriteLine();
-    Console.WriteLine($"=== {label} specialist ===");
+    Console.WriteLine($"=== {label} ===");
     Console.WriteLine($"user> {prompt}");
-    var response = await agent.RunAsync(prompt);
-    Console.WriteLine($"{label}-bot> {response.Text}");
+    var response = await triage.RunAsync(prompt);
+    Console.WriteLine("triage>");
+    Console.WriteLine(response.Text);
 }
 
 // dotnet run executes from bin/Debug/net10.0, so docs/corpus is several
