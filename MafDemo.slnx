@@ -11,5 +11,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
     <Project Path="tests/P02.TicketTools.Tests/P02.TicketTools.Tests.csproj" />
+    <Project Path="tests/P05.GuardrailMiddleware.Tests/P05.GuardrailMiddleware.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,4 +1,5 @@
 using MafDemo.AgentCommon;
+using MafDemo.Core.Domain;
 using MafDemo.Core.Stores;
 using Microsoft.Agents.AI;
 using P05.GuardrailMiddleware;
@@ -12,23 +13,31 @@ using var telemetry = Telemetry.Start("P05.GuardrailMiddleware");
 var store = new InMemoryTicketStore();
 var baseAgent = TicketAgent.Create(store);
 
-// Wrap the base agent in the two run middlewares. Only the non-streaming
-// run func is provided per middleware — the 1.19.0 builder reuses it for
-// both RunAsync and RunStreamingAsync.
+// Seed a ticket directly in the store so the approval scenario targets a
+// known id — the agent must not invent one.
+var seeded = await store.CreateAsync("VPN issue", "cannot connect to VPN", TicketPriority.High);
+Console.WriteLine($"seeded ticket {seeded.Id}");
+
+// Wrap the base agent in the guardrail middlewares. The two run middlewares
+// take the run-delegate shape (only the non-streaming func per middleware —
+// the 1.19.0 builder reuses it for RunAsync and RunStreamingAsync); the
+// approval middleware takes the function-invocation delegate shape and hooks
+// the FunctionInvokingChatClient that P02's TicketBot already puts in the
+// chat pipeline, so it sees every tool call the model makes.
 AIAgent agent = baseAgent
     .AsBuilder()
     .Use(runFunc: RunMiddlewares.Logging(), runStreamingFunc: null)
     .Use(runFunc: RunMiddlewares.Redaction(), runStreamingFunc: null)
+    .Use(ToolApprovalMiddleware.Create())
     .Build();
 
-// Guardrail scenario: the ask contains an employee ID and an email address.
-// The redaction middleware must strip both before the model ever sees the
-// input (the ticket created from it will carry [REDACTED-*] placeholders),
-// while the logging middleware brackets the run with [log] lines.
+// Guardrail scenario: the ask carries an employee ID (redaction middleware
+// strips it before the model sees it) and asks the agent to close a ticket —
+// the approval middleware must ask the operator before UpdateTicketStatusAsync
+// with status Closed is allowed to run. Answer y at the prompt to approve,
+// anything else to reject.
 var ask =
-    "Employee EMP-44555 asks: what is the wifi password policy? " +
-    "Wait, also create a ticket for my VPN issue, priority high, " +
-    "my email is jane.doe@contoso.com";
+    $"Employee EMP-44555 says the VPN issue on ticket {seeded.Id} is fixed — close it";
 
 Console.WriteLine($"user> {ask}");
 var response = await agent.RunAsync(ask);
