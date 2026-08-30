@@ -7,10 +7,12 @@
     <Project Path="src/P03.SessionChat/P03.SessionChat.csproj" />
     <Project Path="src/P04.HandbookRag/P04.HandbookRag.csproj" />
     <Project Path="src/P05.GuardrailMiddleware/P05.GuardrailMiddleware.csproj" />
+    <Project Path="src/P06.TriageComposition/P06.TriageComposition.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
     <Project Path="tests/P02.TicketTools.Tests/P02.TicketTools.Tests.csproj" />
     <Project Path="tests/P05.GuardrailMiddleware.Tests/P05.GuardrailMiddleware.Tests.csproj" />
+    <Project Path="tests/P06.TriageComposition.Tests/P06.TriageComposition.Tests.csproj" />
   </Folder>
 </Solution>
