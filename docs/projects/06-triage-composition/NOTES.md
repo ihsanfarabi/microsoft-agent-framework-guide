@@ -2,7 +2,16 @@
 
 ## Task 4: pattern comparison — agents-as-tools vs handoff, measured
 
-**Method.** Both phases re-run back-to-back from the same binary (`-- as-tools`, then default `handoff`), same machine, same Ollama `glm-5.3-flash:cloud`, minutes apart, against a keyed dashboard instance — see `.superpowers` task-2-tracecheck.md (untracked) for the recipe; traces read via its `/api/telemetry/traces` endpoint with the instance's API key. Traces captured fresh per run and diffed against an 18-trace pre-run snapshot so only this session's spans are counted. Per trace: wall = `max(endTimeUnixNano) - min(startTimeUnixNano)` over the trace's spans; model calls = `chat <model>` span count under scope `Experimental.Microsoft.Agents.AI`; routing = which `execute_tool <name>` appears (Phase 1) or which tool-definition set + chronology the trace carries (Phase 2). Phase 2's two traces per scenario are consecutive on the clock (triage trace ends, specialist starts 3–17 ms later), which is how they were paired with the console's `held by:` order (network → software → hardware).
+**Method.** Both phases re-run back-to-back from the same binary (`-- as-tools`, then default `handoff`), same machine, same Ollama `glm-5.3-flash:cloud`, minutes apart, against a keyed dashboard instance — see `.superpowers` task-2-tracecheck.md (untracked) for the recipe. The unlock, inline:
+
+```bash
+docker run --rm -d -p 18888:18888 -p 4317:18889 --name aspire-dashboard \
+  -e DASHBOARD__FRONTEND__AUTHMODE=ApiKey -e DASHBOARD__FRONTEND__APIKEYDOCUMENT=<key> \
+  -e DASHBOARD__OTLP__AUTHMODE=ApiKey -e DASHBOARD__OTLP__PRIMARYAPIKEY=<key> \
+  mcr.microsoft.com/dotnet/aspire-dashboard:latest
+```
+
+(4317→18889 enables the OTLP telemetry API; set `<key>` to a generated value, never a literal in-repo secret); traces read via its `/api/telemetry/traces` endpoint with the instance's API key. Traces captured fresh per run and diffed against an 18-trace pre-run snapshot so only this session's spans are counted. Per trace: wall = `max(endTimeUnixNano) - min(startTimeUnixNano)` over the trace's spans; model calls = `chat <model>` span count under scope `Experimental.Microsoft.Agents.AI`; routing = which `execute_tool <name>` appears (Phase 1) or which tool-definition set + chronology the trace carries (Phase 2). Phase 2's two traces per scenario are consecutive on the clock (triage trace ends, specialist starts 3–17 ms later), which is how they were paired with the console's `held by:` order (network → software → hardware). The spec's "interactive with the console user" seam for Phase 2 is implemented as control-return + merge loop (the caller merges the agents' messages and re-runs); the scenarios are scripted one-turn so span counts stay reproducible — Program.cs:114-118 documents the same.
 
 ### Phase 1 spans — agents-as-tools (3 traces, one per scenario)
 

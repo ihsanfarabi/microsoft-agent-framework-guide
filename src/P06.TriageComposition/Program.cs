@@ -25,8 +25,8 @@ var chunks = FindCorpusDirectory()
 await retriever.BuildAsync(chunks);
 Console.WriteLine($"indexed {chunks.Count} handbook chunks");
 
-// Seed a ticket so the software specialist's get_ticket scenario targets a
-// known id instead of relying on the model to invent one.
+// Seed one ticket to prove get_ticket plumbing end-to-end; no scenario run
+// actually references it (get_ticket is never called — see NOTES.md).
 var store = new InMemoryTicketStore();
 var seeded = await store.CreateAsync(
     "Email stuck on outbox",
@@ -39,8 +39,8 @@ Console.WriteLine($"seeded ticket {seeded.Id}");
 // the same three questions; handoff runs each as one interactive conversation.
 var mode = args.FirstOrDefault(a => a is "as-tools" or "handoff") ?? "handoff";
 Console.WriteLine($"mode: {mode}");
-if (args.Length > 0 && !args.Contains(mode))
-    Console.WriteLine($"(ignored unknown arg(s) — pass \"handoff\" or \"as-tools\")");
+if (args.Except([mode]).Any())
+    Console.WriteLine("(ignored unknown arg(s) — pass \"handoff\" or \"as-tools\")");
 var tools = new SpecialistTools(store, retriever);
 
 var scenarios = new (string Label, string Prompt)[]
@@ -116,6 +116,8 @@ else
         // The scripted scenarios provide only the opening question, so the
         // conversation closes here with that agent holding it; appending
         // further user turns here is what would make it multi-turn.
+        // Demo-only scaffolding: AddRange is the documented merge seam for
+        // that future multi-turn loop, not a live path in this program.
         messages.AddRange(newMessages.Skip(messages.Count));
         var holdingAgent = newMessages.LastOrDefault(m => m.Role == ChatRole.Assistant) is { } last
             ? (last.AuthorName ?? lastExecutorId ?? "?")
