@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MafDemo.Core\MafDemo.Core.csproj" />
+    <ProjectReference Include="..\MafDemo.AgentCommon\MafDemo.AgentCommon.csproj" />
+    <!-- Reuse (not port) P02's TicketBot: it already carries the four ticket
+         tools, UseFunctionInvocation wiring, and the OllamaChat factory. -->
+    <ProjectReference Include="..\P02.TicketTools\P02.TicketTools.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.19.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.30" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Ships appsettings.json next to the binary so OllamaChat can read it. -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
