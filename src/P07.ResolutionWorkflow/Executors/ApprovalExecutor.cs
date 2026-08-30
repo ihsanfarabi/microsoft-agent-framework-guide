@@ -5,28 +5,24 @@ using Microsoft.Agents.AI.Workflows;
 namespace P07.ResolutionWorkflow.Executors;
 
 /// <summary>
-/// Approval node and resolution node in one executor, because MAF routes a
-/// RequestPort's response back to the executor that SENT the request (the
-/// HITL doc's JudgeExecutor re-entry): this executor both requests operator
-/// sign-off through the <c>FixApproval</c> port and applies whatever comes
-/// back to the ticket store.
+/// Approval node and resolution node in one executor: it asks for operator
+/// sign-off through the <c>FixApproval</c> port (message flowing along the
+/// edge to the port) and receives the operator's <see cref="ApprovalDecision"/>
+/// back along the reverse edge (port → executor), then applies the decision
+/// to the ticket store. So the executor must handle two message types — the
+/// generic-typed <c>Executor&lt;T&gt;</c> on the other executors can't do
+/// that, and the 1.19.0 package ships no <c>[MessageHandler]</c> source
+/// generator (that came later — the executors doc was only updated 2026-08) —
+/// so routes are registered imperatively by overriding
+/// <see cref="Executor.ConfigureProtocol"/>.
 ///
 /// The pending <see cref="TicketContext"/> rides out the pause in workflow
 /// shared state (single fixed key — approvals are answered strictly in-flight,
 /// so only one can be pending at a time) instead of an executor field: a field
 /// would leak across the batch's three sequential runs, and shared state is
 /// what survives checkpoints.
-///
-/// Two message types, one executor: the 1.19.0 package ships no
-/// <c>[MessageHandler]</c> source generator (that came later — the executors
-/// doc was only updated 2026-08), so routes are registered imperatively by
-/// overriding <see cref="Executor.ConfigureProtocol"/>. The generic-typed
-/// <c>Executor&lt;T&gt;</c> on the other executors is sugar over the same
-/// mechanism.
 /// </summary>
-internal sealed class ApprovalExecutor(
-    RequestPort<FixApprovalRequest, ApprovalDecision> port,
-    ITicketStore store) : Executor("FixApproval")
+internal sealed class ApprovalExecutor(ITicketStore store) : Executor("Approval")
 {
     private const string PendingScope = "PendingApproval";
     private const string PendingKey = "ctx";

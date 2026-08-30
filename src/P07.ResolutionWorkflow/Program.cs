@@ -120,16 +120,17 @@ static Workflow BuildWorkflow(ITicketStore store, HandbookRetriever retriever)
     var triageExecutor = new TriageExecutor(Agents.TriageClassifier());
     var diagnosticExecutor = new DiagnosticExecutor(new SpecialistTools(store, retriever));
     var escalationExecutor = new EscalationExecutor(Agents.EscalationEngineer());
-    var approvalExecutor = new ApprovalExecutor(port, store);
+    var approvalExecutor = new ApprovalExecutor(store);
 
     return new WorkflowBuilder(triageExecutor)
         .AddEdge(triageExecutor, diagnosticExecutor)
         .AddEdge(diagnosticExecutor, escalationExecutor,
-            condition: (TicketContext t) => ApprovalPolicy.NeedsEscalation(t.Priority))
+            condition: (TicketContext t) => ApprovalPolicy.NeedsEscalation(t!.Priority))
         .AddEdge(diagnosticExecutor, approvalExecutor,
-            condition: (TicketContext t) => !ApprovalPolicy.NeedsEscalation(t.Priority))
+            condition: (TicketContext t) => !ApprovalPolicy.NeedsEscalation(t!.Priority))
         .AddEdge(escalationExecutor, approvalExecutor)
-        .AddEdge(approvalExecutor, port)
+        .AddEdge(approvalExecutor, port)      // request: FixApprovalRequest -> port
+        .AddEdge(port, approvalExecutor)      // response: ApprovalDecision back
         .WithOutputFrom(approvalExecutor)
         .Build();
 }
