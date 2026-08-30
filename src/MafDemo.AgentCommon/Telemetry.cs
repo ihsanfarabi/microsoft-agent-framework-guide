@@ -24,4 +24,28 @@ public static class Telemetry
             .AddSource(SourceName)
             .AddConsoleExporter()
             .Build();
+
+    /// <summary>
+    /// Default OTLP (gRPC) receiver the Aspire dashboard container exposes:
+    /// the standalone image listens on 18889 inside the container, and
+    /// <c>aspire-dashboard.sh</c> maps host 4317 to it.
+    /// </summary>
+    public const string DefaultOtlpEndpoint = "http://localhost:4317";
+
+    /// <summary>
+    /// Builds and starts a trace provider that exports over OTLP (gRPC)
+    /// instead of to the console — the target is the standalone Aspire
+    /// dashboard (started with <c>aspire-dashboard.sh</c>). The endpoint
+    /// defaults to <see cref="DefaultOtlpEndpoint"/> and is overridable via
+    /// the standard <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> environment variable.
+    /// Dispose to flush spans.
+    /// </summary>
+    public static TracerProvider StartOtlp(string serviceName) =>
+        Sdk.CreateTracerProviderBuilder()
+            .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
+            .AddSource(SourceName)
+            .AddOtlpExporter(o => o.Endpoint = new Uri(
+                Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
+                    ?? DefaultOtlpEndpoint))
+            .Build();
 }

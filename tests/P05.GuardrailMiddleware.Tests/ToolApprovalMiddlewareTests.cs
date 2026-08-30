@@ -18,7 +18,7 @@ public class ToolApprovalMiddlewareTests
     /// </summary>
     private static FunctionInvocationContext MakeContext(string functionName, string? status = null)
     {
-        Func<string, string, string> updateStatus = (id, status) => "status updated";
+        Func<string, string, string> updateStatus = (ticketId, newStatus) => "status updated";
         return new FunctionInvocationContext
         {
             Function = AIFunctionFactory.Create(

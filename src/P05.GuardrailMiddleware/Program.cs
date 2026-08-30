@@ -6,9 +6,12 @@ using P05.GuardrailMiddleware;
 using P05.GuardrailMiddleware.Middleware;
 
 // Start OTel tracing first so the provider is listening before any model call.
-// The redaction middleware strips PII before the messages reach the agent, so
-// what the spans capture for the model input is the redacted text.
-using var telemetry = Telemetry.Start("P05.GuardrailMiddleware");
+// StartOtlp ships the spans over OTLP to the Aspire dashboard (start it with
+// ./aspire-dashboard.sh, then browse http://localhost:18888 -> Traces) instead
+// of printing them to the console. The redaction middleware strips PII before
+// the messages reach the agent, so what the spans capture for the model input
+// is the redacted text.
+using var telemetry = Telemetry.StartOtlp("P05.GuardrailMiddleware");
 
 var store = new InMemoryTicketStore();
 var baseAgent = TicketAgent.Create(store);
@@ -33,8 +36,8 @@ AIAgent agent = baseAgent
 
 // Guardrail scenario: the ask carries an employee ID (redaction middleware
 // strips it before the model sees it) and asks the agent to close a ticket —
-// the approval middleware must ask the operator before UpdateTicketStatusAsync
-// with status Closed is allowed to run. Answer y at the prompt to approve,
+// the approval middleware must ask the operator before the UpdateTicketStatus
+// tool with status Closed is allowed to run. Answer y at the prompt to approve,
 // anything else to reject.
 var ask =
     $"Employee EMP-44555 says the VPN issue on ticket {seeded.Id} is fixed — close it";
