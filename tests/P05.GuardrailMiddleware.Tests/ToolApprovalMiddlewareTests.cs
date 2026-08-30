@@ -82,4 +82,52 @@ public class ToolApprovalMiddlewareTests
         Assert.True(nextInvoked);
         Assert.Equal(NextResult, result);
     }
+
+    /// <summary>
+    /// Pins the ordinal case-insensitive status comparison: a model sending
+    /// "closed" (lowercase) must still be gated, so the approval prompt is
+    /// consulted and a rejection returns without invoking next. A refactor
+    /// that drops OrdinalIgnoreCase on the status check would silently
+    /// reopen the hole the Task 3 live run already bit once on the name
+    /// dimension — this test holds the case dimension shut.
+    /// </summary>
+    [Fact]
+    public async Task Destructive_call_with_lowercase_closed_status_is_still_gated()
+    {
+        var nextInvoked = false;
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next =
+            (_, _) => { nextInvoked = true; return ValueTask.FromResult<object?>(NextResult); };
+
+        var middleware = ToolApprovalMiddleware.Create(prompt: _ => false);
+        var context = MakeContext("UpdateTicketStatus", "closed");
+
+        var result = await middleware(null!, context, next, CancellationToken.None);
+
+        Assert.False(nextInvoked);
+        var text = Assert.IsType<string>(result);
+        Assert.Contains("Rejected by operator approval", text);
+    }
+
+    /// <summary>
+    /// The other half of the case pin: a status that merely differs from
+    /// "Closed" — here "In Progress", including the space — must pass
+    /// straight through without the prompt ever being consulted.
+    /// </summary>
+    [Fact]
+    public async Task Destructive_call_with_in_progress_status_passes_through()
+    {
+        var nextInvoked = false;
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next =
+            (_, _) => { nextInvoked = true; return ValueTask.FromResult<object?>(NextResult); };
+
+        // prompt:false would veto anything it is asked about — the pass-through
+        // only proves out if the prompt is never consulted for this call.
+        var middleware = ToolApprovalMiddleware.Create(prompt: _ => false);
+        var context = MakeContext("UpdateTicketStatus", "In Progress");
+
+        var result = await middleware(null!, context, next, CancellationToken.None);
+
+        Assert.True(nextInvoked);
+        Assert.Equal(NextResult, result);
+    }
 }
