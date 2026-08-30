@@ -1,7 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- REUSE, NOT PORT: Core (stores), AgentCommon (Ollama chat), P06
+       (HelpDeskHQ specialists drive the diagnosis node). -->
   <ItemGroup>
     <ProjectReference Include="..\MafDemo.Core\MafDemo.Core.csproj" />
+    <ProjectReference Include="..\P06.TriageComposition\P06.TriageComposition.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,5 +19,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!-- Ships appsettings.json next to the binary so OllamaChat can read it. -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>
