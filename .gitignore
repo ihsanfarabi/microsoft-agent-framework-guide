@@ -6,3 +6,6 @@ obj/
 .vscode/
 threads/
 tickets.json
+p07-tickets.json*
+p07-checkpoint-info.json
+p07-checkpoints/
