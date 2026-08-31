@@ -24,10 +24,12 @@ internal sealed class TriageExecutor(AIAgent triageAgent)
             $"Classify in one word (network/software/hardware): {ctx.Title}: {ctx.Description}",
             cancellationToken: ct);
         var triaged = ctx with { Triage = reply.Text };
-        // No ambient Console prints inside executors: durable replay would
-        // re-emit them (P09 caveat). Stage progress surfaces as workflow
-        // output events both hosts (P07 console loop, P09 DurableHost) print.
-        await context.YieldOutputAsync($"[triage] ticket {triaged.TicketId}: {triaged.Triage}", ct);
+        // Console (not YieldOutput): the 1.16.0-preview durable host crashes
+        // deserializing string-output WorkflowOutputEvents back out of the
+        // scheduler's custom status (property-name case mismatch). Executors
+        // run once per real execution — activities don't re-run on replay —
+        // so the print is durable-safe. Recorded in P09 NOTES.md.
+        Console.WriteLine($"[triage] ticket {triaged.TicketId}: {triaged.Triage}");
         await context.SendMessageAsync(triaged, cancellationToken: ct);
     }
 }
@@ -52,7 +54,7 @@ internal sealed class DiagnosticExecutor(SpecialistTools tools)
             $"Ticket: {ctx.Title}. {ctx.Description}\nDiagnose and propose a concise fix (1-3 sentences, action first).",
             cancellationToken: ct);
         var diagnosed = ctx with { Diagnosis = reply.Text, ProposedFix = reply.Text };
-        await context.YieldOutputAsync($"[diagnose] ticket {diagnosed.TicketId}: {diagnosed.Diagnosis}", ct);
+        Console.WriteLine($"[diagnose] ticket {diagnosed.TicketId}: {diagnosed.Diagnosis}");
         await context.SendMessageAsync(diagnosed, cancellationToken: ct);
     }
 }
@@ -75,7 +77,7 @@ internal sealed class EscalationExecutor(AIAgent escalationAgent)
             $"Refine this fix for a Critical incident: {ctx.ProposedFix}",
             cancellationToken: ct);
         var escalated = ctx with { ProposedFix = reply.Text };
-        await context.YieldOutputAsync($"[escalate] ticket {escalated.TicketId}: {escalated.ProposedFix}", ct);
+        Console.WriteLine($"[escalate] ticket {escalated.TicketId}: {escalated.ProposedFix}");
         await context.SendMessageAsync(escalated, cancellationToken: ct);
     }
 }

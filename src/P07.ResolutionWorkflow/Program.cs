@@ -31,10 +31,6 @@ Console.WriteLine($"indexed {chunks.Count} handbook chunks");
 // P06's InMemoryTicketStore. Git-ignored next to the run directory.
 ITicketStore store = new FileTicketStore("p07-tickets.json");
 
-return args.FirstOrDefault() == "resume"
-    ? await RunResumeAsync(store, retriever)
-    : await RunBatchAsync(store, retriever);
-
 // ---- Checkpoint plumbing (Task 4). Checkpointing is always-on for the
 // batch: a JSON checkpoint store persists each super step to disk, and every
 // SuperStepCompletedEvent refreshes a one-line checkpoint-info file so the
@@ -45,6 +41,10 @@ return args.FirstOrDefault() == "resume"
 // RequestInfoEvent goes out (the one we resume from), one after the answer.
 const string CheckpointDirName = "p07-checkpoints";
 const string CheckpointInfoFile = "p07-checkpoint-info.json";
+
+return args.FirstOrDefault() == "resume"
+    ? await RunResumeAsync(store, retriever)
+    : await RunBatchAsync(store, retriever);
 
 static (CheckpointManager manager, DirectoryInfo dir) MakeCheckpointManager()
 {

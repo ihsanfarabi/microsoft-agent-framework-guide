@@ -29,10 +29,17 @@ internal sealed class ApprovalExecutor(ITicketStore store) : Executor("Approval"
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocol)
     {
+        // The ApprovalDecision handler is registered FIRST, deliberately: its
+        // message reaches this executor only through the RequestPort response,
+        // and the 1.16.0-preview durable runner delivers that as an UNTYPED
+        // result message (WaitForExternalEvent<string> strips the type) —
+        // ResolveInputType then falls back to the first registered handler.
+        // In-proc runs dispatch on the live object's type, so registration
+        // order is irrelevant there. Recorded in P09 NOTES.md.
         return protocol
             .ConfigureRoutes(routes => routes
-                .AddHandler<TicketContext>(OnTicketAsync)
-                .AddHandler<ApprovalDecision>(OnDecisionAsync))
+                .AddHandler<ApprovalDecision>(OnDecisionAsync)
+                .AddHandler<TicketContext>(OnTicketAsync))
             .SendsMessageType(typeof(FixApprovalRequest))
             .YieldsOutputType(typeof(string));
     }
@@ -66,7 +73,8 @@ internal sealed class ApprovalExecutor(ITicketStore store) : Executor("Approval"
             await store.AddNoteAsync(ctx.TicketId, ApprovalPolicy.RejectionNote(decision));
         }
 
-        await context.YieldOutputAsync(
-            $"ticket {ctx.TicketId}: {(decision.Approved ? "resolved" : "rejected — in progress")}", ct);
+        // Console, not YieldOutputAsync: same durable-host serialization bug
+        // as StageExecutors (P09 NOTES.md).
+        Console.WriteLine($"ticket {ctx.TicketId}: {(decision.Approved ? "resolved" : "rejected — in progress")}");
     }
 }

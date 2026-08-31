@@ -101,8 +101,10 @@ static async Task<int> DriveEventsAsync(IStreamingWorkflowRun run, string runInf
         {
             case DurableWorkflowWaitingForInputEvent reqEvt:
                 // The durable input event carries the JSON-serialized request
-                // (RequestInfoEvent's typed accessor doesn't exist here).
-                var request = JsonSerializer.Deserialize<FixApprovalRequest>(reqEvt.Input);
+                // (RequestInfoEvent's typed accessor doesn't exist here), in
+                // DurableSerialization's camelCase naming.
+                var request = JsonSerializer.Deserialize<FixApprovalRequest>(reqEvt.Input,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
                 if (request is null)
                 {
                     Console.Error.WriteLine($"[unexpected request] {reqEvt.RequestPort.Id}: {reqEvt.Input}");

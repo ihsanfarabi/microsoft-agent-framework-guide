@@ -9,5 +9,7 @@ tickets.json
 p07-tickets.json*
 p07-checkpoint-info.json
 p07-checkpoints/
+p09-tickets.json*
+p09-runinfo.json
 work/
 agent-file-memory/
