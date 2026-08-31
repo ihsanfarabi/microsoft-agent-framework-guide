@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MafDemo.Core\MafDemo.Core.csproj" />
+    <ProjectReference Include="..\..\src\MafDemo.AgentCommon\MafDemo.AgentCommon.csproj" />
+    <ProjectReference Include="..\..\src\P04.HandbookRag\P04.HandbookRag.csproj" />
   </ItemGroup>
 
 </Project>
