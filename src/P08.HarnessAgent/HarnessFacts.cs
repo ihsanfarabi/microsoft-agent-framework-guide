@@ -44,16 +44,22 @@ public static class HarnessFacts
             // tool calls in the same turn were never invoked either). The MAF
             // read-only auto-approval rule (ls/grep/read) keeps writes gated —
             // the overnight agent only ever needs to consult the handbook.
+            // The P08 ApprovalPolicy rule rides the same list: read-only ticket
+            // tools pass, close_ticket falls through to the operator prompt
+            // wired in Program.cs (a "y/n/a" answer can also record a standing
+            // rule, after which later closes auto-pass).
             ToolApprovalAgentOptions = new ToolApprovalAgentOptions
             {
-                AutoApprovalRules = [FileAccessProvider.ReadOnlyToolsAutoApprovalRule],
+                AutoApprovalRules = [ApprovalPolicy.ShouldAutoApprove, FileAccessProvider.ReadOnlyToolsAutoApprovalRule],
             },
             ChatOptions = new ChatOptions
             {
                 Instructions = """
                     You are HelpDeskHQ's overnight agent. For each ticket in the backlog:
                     1) track it in your todo list, 2) consult handbook docs in work/handbook/,
-                    3) add a resolution note to the ticket, 4) request approval to close it.
+                    3) add a resolution note to the ticket, 4) call close_ticket to request
+                    approval to close it — the approval prompt goes to the operator, and a
+                    declined close leaves the ticket open.
                     Finish all tickets before reporting a summary.
                     """,
                 Tools = tools,

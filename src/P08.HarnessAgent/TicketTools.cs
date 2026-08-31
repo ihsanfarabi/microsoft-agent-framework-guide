@@ -70,7 +70,11 @@ public sealed class TicketTools(ITicketStore store)
     /// The full tool set for the harness agent, wire names pinned explicitly
     /// (P06 convention) so the model-facing contract is stable regardless of
     /// how <see cref="AIFunctionFactory"/> would derive names from the
-    /// <c>*Async</c> methods.
+    /// <c>*Async</c> methods. <c>close_ticket</c> — the batch's one
+    /// irreversible action — is wrapped in
+    /// <see cref="ApprovalRequiredAIFunction"/> so the harness approval flow
+    /// holds it for a human decision instead of running it unattended
+    /// (<see cref="ApprovalPolicy"/> auto-approves only the read-only set).
     /// </summary>
     public static AIFunction[] All(TicketTools tools) =>
     [
@@ -86,8 +90,8 @@ public sealed class TicketTools(ITicketStore store)
         AIFunctionFactory.Create(tools.AddTicketNoteAsync,
             name: "add_note",
             description: "Append a note (e.g. a resolution summary) to a support ticket identified by its GUID."),
-        AIFunctionFactory.Create(tools.CloseTicketAsync,
+        new ApprovalRequiredAIFunction(AIFunctionFactory.Create(tools.CloseTicketAsync,
             name: "close_ticket",
-            description: "Close a support ticket identified by its GUID after its resolution is recorded."),
+            description: "Close a support ticket identified by its GUID after its resolution is recorded.")),
     ];
 }
