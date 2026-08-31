@@ -10,6 +10,7 @@
     <Project Path="src/P06.TriageComposition/P06.TriageComposition.csproj" />
     <Project Path="src/P07.ResolutionWorkflow/P07.ResolutionWorkflow.csproj" />
     <Project Path="src/P08.HarnessAgent/P08.HarnessAgent.csproj" />
+    <Project Path="src/P09.InventoryAgentService/P09.InventoryAgentService.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
