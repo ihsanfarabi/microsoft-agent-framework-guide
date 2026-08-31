@@ -12,11 +12,40 @@
 
 ## Global Constraints
 
-- Verified server packages: `Microsoft.Agents.AI.Hosting.A2A.AspNetCore` (pulls `Microsoft.Agents.AI.Hosting.A2A`) + `A2A.AspNetCore --prerelease`. Server pattern: `builder.AddAIAgent("inventory", ...)` then `app.MapA2A(agent, "/a2a/inventory")`.
-- Verified client package: `Microsoft.Agents.AI.A2A` — `A2AAgent` wraps any A2A endpoint as standard `AIAgent` (`RunAsync`/`RunStreamingAsync` work).
-- Verified durable BYO packages: `Microsoft.Agents.AI.DurableTask --prerelease`, `Microsoft.DurableTask.Client.AzureManaged`, `Microsoft.DurableTask.Worker.AzureManaged`, `Microsoft.Extensions.Hosting`; host pattern: `Host.CreateDefaultBuilder` + `services.ConfigureDurableWorkflows(options => options.AddWorkflows(workflow), workerBuilder: b => b.UseDurableTaskScheduler(cs), clientBuilder: b => b.UseDurableTaskScheduler(cs))`; connection string `Endpoint=http://localhost:8080;TaskHub=default;Authentication=None`.
-- Local scheduler backend = Durable Task Scheduler emulator container: `docker run -d -p 8080:8080 mcr.microsoft.com/durabletask/scheduler-emulator` (verify image tag on https://learn.microsoft.com/en-us/azure/durable-task/scheduler-emulator before first run).
-- P07 workflow definition imported as-is; durability added by hosting, not by rewriting the graph.
+All API below verified against live MS Learn docs + NuGet on 2026-08-30. Latest package line is 1.19.0-preview (A2A) / 1.16.0-preview (DurableTask); `dotnet add --prerelease` resolves these.
+
+- **A2A server** (verified: learn.microsoft.com/agent-framework/hosting/self-hosting/a2a/dotnet): packages `Microsoft.Agents.AI.Hosting.A2A.AspNetCore --prerelease` (pulls core) + `A2A.AspNetCore --prerelease`. NO Azure packages needed (doc sample uses Foundry; Ollama replaces it). Server pattern is NOT `AddAIAgent`/`MapA2A`:
+  ```csharp
+  builder.Services.AddKeyedSingleton<AIAgent>("inventory", (sp, _) => agent);
+  builder.AddA2AServer("inventory");
+  var app = builder.Build();
+  app.MapA2AHttpJson("inventory", "/a2a/inventory");   // HTTP+JSON binding (MapA2AJsonRpc for JSON-RPC)
+  app.MapWellKnownAgentCard(new AgentCard { Name = "InventoryAgent", ..., SupportedInterfaces = [...] }); // from A2A.AspNetCore
+  ```
+  Card served at host-root `/.well-known/agent.json` (server doc). Client doc claims `/.well-known/agent-card.json` — docs disagree; probe both at runtime.
+- **A2A client** (verified: .../integrations/by-component/agent-services/a2a): package `Microsoft.Agents.AI.A2A --prerelease`. Discovery — resolver takes the remote HOST base URI, not the endpoint path (it fetches the card from the well-known path):
+  ```csharp
+  var resolver = new A2ACardResolver(new Uri("http://localhost:5199"));
+  AIAgent remote = await resolver.GetAIAgentAsync();  // card + agent in one call
+  ```
+  Alternatives: `agentCard.AsAIAgent()`, or direct `new A2AClient(new Uri(...)).AsAIAgent(...)`.
+- **Agent as tool** (verified: .../agents/tools "Using an Agent as a Function Tool"): extension is `.AsAIFunction()` on the AIAgent (NOT `AsAITool`): `tools: [remote.AsAIFunction()]`.
+- **Durable BYO-compute** (verified: learn.microsoft.com/azure/durable-task/sdks/durable-agents-microsoft-agent-framework + devblogs durable-workflows): packages `Microsoft.Agents.AI.DurableTask --prerelease`, `Microsoft.DurableTask.Client.AzureManaged`, `Microsoft.DurableTask.Worker.AzureManaged`, `Microsoft.Extensions.Hosting` (P07 csproj already brings `Microsoft.Agents.AI.Workflows`). Host + invoke:
+  ```csharp
+  services.ConfigureDurableWorkflows(
+      workflowOptions => workflowOptions.AddWorkflow(workflow),   // singular per both docs; verify plural variant in IntelliSense
+      workerBuilder: b => b.UseDurableTaskScheduler(cs),
+      clientBuilder: b => b.UseDurableTaskScheduler(cs));
+  // ...await host.StartAsync();
+  IWorkflowClient client = host.Services.GetRequiredService<IWorkflowClient>();
+  IAwaitableWorkflowRun run = (IAwaitableWorkflowRun)await client.RunAsync(workflow, input);
+  string? result = await run.WaitForCompletionAsync<string>();
+  ```
+  HITL (P07 graph has a RequestPort): use `await client.StreamAsync(workflow, input)` — `IStreamingWorkflowRun.WatchStreamAsync()` yields `DurableWorkflowWaitingForInputEvent` (pending port) → answer via `run.SendResponseAsync(evt, response)`; completes with `DurableWorkflowCompletedEvent`.
+- Connection string: `Endpoint=http://localhost:8080;TaskHub=default;Authentication=None`.
+- Local scheduler backend = DTS emulator: image `mcr.microsoft.com/dts/dts-emulator:latest`, `docker run -d -p 8080:8080 -p 8082:8082 mcr.microsoft.com/dts/dts-emulator:latest` (8080 gRPC scheduler, 8082 dashboard). Plan's earlier `mcr.microsoft.com/durabletask/scheduler-emulator` image does not exist.
+- **P07 import caveat**: P07's `BuildWorkflow(store, retriever)` is a private static inside `Program.cs` — not visible to P09. Task 4 extracts it verbatim into a public factory in the P07 project (graph unchanged); durability comes from hosting, not from rewriting the graph.
+- Both runnable projects wire OTLP telemetry via AgentCommon's `Telemetry.StartOtlp` (P07 pattern) for the Aspire trace check. NEVER run a service or the emulator in a foreground Bash call — background + tail polling (P08 lesson).
 - Commit after every task: `rtk git add -A && rtk git commit -m "..."`.
 
 ---
@@ -98,7 +127,7 @@ public static class InventoryTools
 ```
 (Async plumbing: prefer `Func<string, Task<...>>` overloads if `AIFunctionFactory.Create` supports them — adjust.)
 
-- [ ] **Step 3: `Program.cs`** — verified pattern:
+- [ ] **Step 3: `Program.cs`** — verified pattern (Global Constraints has full snippet):
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -110,15 +139,29 @@ builder.Services.AddSingleton<IInventoryStore>(sp => {
 var client = new ChatClientBuilder(OllamaChat.Create()).UseFunctionInvocation().Build();
 var inventory = new ChatClientAgent(client, name: "InventoryAgent",
     instructions: "You answer loaner laptop stock questions using tools only.");
-builder.AddAIAgent("inventory", (sp, key) => inventory); // verify signature vs doc sample
+
+builder.Services.AddKeyedSingleton<AIAgent>("inventory", (_, _) => inventory);
+builder.AddA2AServer("inventory");
+
 var app = builder.Build();
-app.MapA2A(inventory, "/a2a/inventory");
+app.MapA2AHttpJson("inventory", "/a2a/inventory");
+app.MapWellKnownAgentCard(new AgentCard
+{
+    Name = "InventoryAgent",
+    Description = "Loaner laptop stock and reservations.",
+    SupportedInterfaces = [new AgentInterface
+    {
+        Url = "http://localhost:5199/a2a/inventory",
+        ProtocolBinding = ProtocolBindingNames.HttpJson,
+        ProtocolVersion = "1.0",
+    }],
+});
 app.Run();
 ```
-(Exact `AddAIAgent`/`MapA2A` signatures: copy from https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/a2a/dotnet sample.)
+Bind port 5199 explicitly (`builder.WebHost.UseUrls("http://localhost:5199")` or launchSettings) so client/card URLs are stable.
 
-- [ ] **Step 4: Run + verify card** — `dotnet run --project src/P09.InventoryAgentService`, then
-`curl http://localhost:5199/a2a/inventory/.well-known/agent-card.json` (path per A2A spec; check doc if 404 — may be `/.well-known/agent.json`).
+- [ ] **Step 4: Run + verify card** — `dotnet run --project src/P09.InventoryAgentService` (background + tail polling), then
+`curl http://localhost:5199/.well-known/agent.json` (docs disagree: probe `/.well-known/agent-card.json` too if 404).
 Expected: JSON card naming InventoryAgent.
 
 - [ ] **Step 5: Commit** — `feat(p09): inventory agent exposed via a2a`
@@ -137,15 +180,21 @@ dotnet add src/P09.HelpDeskClient package Microsoft.Agents.AI.A2A --prerelease
 dotnet add src/P09.HelpDeskClient package OllamaSharp
 ```
 
-- [ ] **Step 2: Discover + wrap remote agent** — client creation API: copy discovery code from https://learn.microsoft.com/en-us/agent-framework/integrations/by-component/agent-services/a2a (well-known URI strategy). Sketch:
+- [ ] **Step 2: Discover + wrap remote agent** — verified API (MS Learn A2A agent service doc): `A2ACardResolver` takes the remote HOST base URI (it fetches the card from the well-known path — NOT the endpoint path):
 
 ```csharp
-// verify exact factory/discovery call from doc
-AIAgent remote = A2AAgentFactory.CreateFromWellKnownUri(
-    new Uri("http://localhost:5199/a2a/inventory"));  // name to fix from doc
+var resolver = new A2ACardResolver(new Uri("http://localhost:5199"));
+AIAgent remote = await resolver.GetAIAgentAsync();  // card + AIAgent in one call
 ```
 
-- [ ] **Step 3: Use remote agent as tool** — helpdesk `ChatClientAgent` over Ollama with the remote `AIAgent` exposed as agent-tool (`remote.AsAITool(...)` — verify extension from "Agents as tools" doc https://learn.microsoft.com/en-us/agent-framework/journey/agents-as-tools). Prompt:
+- [ ] **Step 3: Use remote agent as tool** — helpdesk `ChatClientAgent` over Ollama with the remote `AIAgent` exposed as a function tool via `.AsAIFunction()` (verified extension name; NOT `AsAITool`):
+
+```csharp
+var helpdesk = new ChatClientAgent(client, name: "HelpDeskAgent",
+    instructions: "...", tools: [remote.AsAIFunction()]);
+```
+
+Prompt:
 
 ```
 "Ticket 4 needs a loaner laptop. Check stock and reserve one if possible."
@@ -161,7 +210,7 @@ AIAgent remote = A2AAgentFactory.CreateFromWellKnownUri(
 
 **Files:**
 - Create: `src/P09.DurableHost/` console (generic host) — `Program.cs`
-- Modify: nothing in P07 workflow definition (import as-is)
+- Modify: `src/P07.ResolutionWorkflow/` — extract `BuildWorkflow` verbatim into a public factory (`ResolutionWorkflowFacts.cs`: `public static Workflow Build(ITicketStore store, HandbookRetriever retriever)`); Program.cs calls it. Graph topology/executor ids UNCHANGED.
 
 - [ ] **Step 1: Scaffold + verified packages**
 
@@ -175,39 +224,52 @@ dotnet add src/P09.DurableHost package Microsoft.DurableTask.Worker.AzureManaged
 dotnet add src/P09.DurableHost package Microsoft.Extensions.Hosting
 ```
 
-- [ ] **Step 2: Start scheduler emulator**
+- [ ] **Step 1b: Extract P07 factory** — move `BuildWorkflow` body verbatim into `src/P07.ResolutionWorkflow/ResolutionWorkflowFacts.cs`, public static, P07 Program.cs delegates to it. Run P07's own scenario once to confirm nothing broke.
+
+- [ ] **Step 2: Start scheduler emulator** (background + tail polling)
 
 ```bash
-docker run -d -p 8080:8080 mcr.microsoft.com/durabletask/scheduler-emulator
+docker run -d -p 8080:8080 -p 8082:8082 mcr.microsoft.com/dts/dts-emulator:latest
 ```
-(Verify tag/startup on Durable Task Scheduler emulator docs; container must serve `http://localhost:8080`.)
+(8080 = scheduler gRPC, 8082 = dashboard at http://localhost:8082. Verify with `docker ps` + `curl` before continuing.)
 
-- [ ] **Step 3: Host** — verified pattern:
+- [ ] **Step 3: Host + client** — verified pattern (full snippets in Global Constraints):
 
 ```csharp
 string cs = Environment.GetEnvironmentVariable("DURABLE_TASK_SCHEDULER_CONNECTION_STRING")
     ?? "Endpoint=http://localhost:8080;TaskHub=default;Authentication=None";
 
-var workflow = ResolutionWorkflowFacts.Build(); // P07 factory — rename to actual P07 builder
+var workflow = ResolutionWorkflowFacts.Build(store, retriever);
 
 IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureServices(services =>
     {
         services.ConfigureDurableWorkflows(
-            options => options.AddWorkflows(workflow),
+            workflowOptions => workflowOptions.AddWorkflow(workflow),
             workerBuilder: b => b.UseDurableTaskScheduler(cs),
             clientBuilder: b => b.UseDurableTaskScheduler(cs));
     })
     .Build();
 
-await host.StartAsync;
-// then: schedule a workflow run via the durable client (verify client invocation
-// API from dotnet/samples/04-hosting/DurableWorkflows/ConsoleApps) and keep host alive
+await host.StartAsync();
+IWorkflowClient client = host.Services.GetRequiredService<IWorkflowClient>();
+// P07 graph ends in a RequestPort (FixApproval HITL) → stream, don't RunAsync:
+IStreamingWorkflowRun run = await client.StreamAsync(workflow, ticketCtx);
+await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+{
+    switch (evt)
+    {
+        case DurableWorkflowWaitingForInputEvent req: /* prompt + run.SendResponseAsync(req, decision) */ break;
+        case DurableWorkflowCompletedEvent done: /* report */ break;
+    }
+}
 ```
 
-- [ ] **Step 4: Run + kill mid-workflow** — schedule run with a new ticket; when the workflow reaches the HITL approval step (or mid-diagnosis), Ctrl-C the host.
+Executor caveat: durable executors must be replay-safe — no ambient `Console.WriteLine`/clock/Random inside executors; P07 executors print only via the streaming event loop in Program.cs, so verify and move any stray prints out before hosting durably. Also: RequestPort forwards only the RESPONSE downstream — P07's approval executor already carries its own state, so nothing to persist, but confirm at runtime.
 
-- [ ] **Step 5: Restart host** — restart, re-attach client to same task hub. Expected: workflow resumes from checkpoint — completed steps not re-executed (verify in trace; the durable samples show the client reconnect pattern).
+- [ ] **Step 4: Run + kill mid-workflow** — schedule a run with a fresh ticket; when the workflow reaches the FixApproval RequestPort (DurableWorkflowWaitingForInputEvent), Ctrl-C the host WITHOUT answering.
+
+- [ ] **Step 5: Restart host** — restart, re-attach client to same task hub. Expected: workflow resumes from checkpoint — the paused instance is redelivered by the scheduler; completed steps not re-executed (verify in dashboard/trace).
 
 - [ ] **Step 6: Commit** — `feat(p09): durable resolution workflow with kill-and-resume`
 
@@ -216,5 +278,5 @@ await host.StartAsync;
 **Files:**
 - Create: `docs/projects/09-a2a-durable/NOTES.md`
 
-- [ ] **Step 1: NOTES.md** — bullets: A2A discovery flow (card → JSON-RPC), what changed vs in-process agent-tool from P06, durable checkpoint resume semantics, what the emulator is standing in for.
+- [ ] **Step 1: NOTES.md** — bullets: A2A discovery flow (card at well-known path → HTTP+JSON binding), what changed vs in-process agent-tool from P06, durable checkpoint resume semantics (executors = activities, RequestPort = specialized dispatch), what the DTS emulator is standing in for, plus every runtime divergence from this plan's verified citations.
 - [ ] **Step 2: Commit** — `docs(p09): learning notes`
