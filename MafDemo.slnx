@@ -13,6 +13,7 @@
     <Project Path="src/P09.DurableHost/P09.DurableHost.csproj" />
     <Project Path="src/P09.HelpDeskClient/P09.HelpDeskClient.csproj" />
     <Project Path="src/P09.InventoryAgentService/P09.InventoryAgentService.csproj" />
+    <Project Path="src/P10.HelpDeskCapstone/P10.HelpDeskCapstone.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
