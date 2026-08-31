@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- REUSE, NOT PORT: the P07 graph comes through ResolutionWorkflowFacts
+       (verbatim extraction), handbook retrieval through P04/P06. -->
+  <ItemGroup>
+    <ProjectReference Include="..\P07.ResolutionWorkflow\P07.ResolutionWorkflow.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI.DurableTask" Version="1.16.0-preview.260730.1" />
+    <PackageReference Include="Microsoft.DurableTask.Client.AzureManaged" Version="1.25.0-preview.2" />
+    <PackageReference Include="Microsoft.DurableTask.Worker.AzureManaged" Version="1.25.0-preview.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Ships appsettings.json next to the binary so OllamaChat can read it. -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

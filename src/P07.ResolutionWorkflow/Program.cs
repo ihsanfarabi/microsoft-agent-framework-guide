@@ -226,31 +226,10 @@ static async Task<Guid?> DriveEventsAsync(StreamingRun handle, CheckpointManager
     return answeredTicket;
 }
 
-// ---- Graph wiring. Conditional edges send the Critical ticket through the
-// escalation node (decision from ApprovalPolicy, kept pure/testable); the
-// approval executor sends FixApprovalRequest along the edge to the
-// RequestPort, and the runtime returns the operator's ApprovalDecision to
-// that same executor (HITL response routing).
-static Workflow BuildWorkflow(ITicketStore store, HandbookRetriever retriever)
-{
-    var port = RequestPort.Create<FixApprovalRequest, ApprovalDecision>("FixApproval");
-    var triageExecutor = new TriageExecutor(Agents.TriageClassifier());
-    var diagnosticExecutor = new DiagnosticExecutor(new SpecialistTools(store, retriever));
-    var escalationExecutor = new EscalationExecutor(Agents.EscalationEngineer());
-    var approvalExecutor = new ApprovalExecutor(store);
-
-    return new WorkflowBuilder(triageExecutor)
-        .AddEdge(triageExecutor, diagnosticExecutor)
-        .AddEdge(diagnosticExecutor, escalationExecutor,
-            condition: (TicketContext t) => ApprovalPolicy.NeedsEscalation(t!.Priority))
-        .AddEdge(diagnosticExecutor, approvalExecutor,
-            condition: (TicketContext t) => !ApprovalPolicy.NeedsEscalation(t!.Priority))
-        .AddEdge(escalationExecutor, approvalExecutor)
-        .AddEdge(approvalExecutor, port)      // request: FixApprovalRequest -> port
-        .AddEdge(port, approvalExecutor)      // response: ApprovalDecision back
-        .WithOutputFrom(approvalExecutor)
-        .Build();
-}
+// ---- Graph wiring lives in ResolutionWorkflowFacts.Build (verbatim move —
+// P09.DurableHost builds the same graph through the public factory).
+static Workflow BuildWorkflow(ITicketStore store, HandbookRetriever retriever) =>
+    ResolutionWorkflowFacts.Build(store, retriever);
 
 // dotnet run executes from bin/Debug/net10.0, so docs/corpus is several
 // levels above the working directory — walk up from the binary location the

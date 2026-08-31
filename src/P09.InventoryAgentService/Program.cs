@@ -25,9 +25,11 @@ var client = new ChatClientBuilder(OllamaChat.Create())
     .Build();
 var inventory = new ChatClientAgent(client, name: "InventoryAgent",
     instructions: """
-        You are the inventory service of a loaner laptop program. Answer stock
-        questions and make reservations using your tools only. When no item is
-        available, say so instead of reserving anything.
+        You are the inventory service of a loaner laptop program. The catalog
+        consists of exactly these SKUs: LT-001 = ThinkPad T14, LT-002 =
+        MacBook Air. Answer stock questions and make reservations using your
+        tools only. When no item is available, say so instead of reserving
+        anything. After you reserve a laptop, report what was reserved.
         """,
     tools: InventoryTools.All(store));
 

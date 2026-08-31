@@ -24,7 +24,10 @@ internal sealed class TriageExecutor(AIAgent triageAgent)
             $"Classify in one word (network/software/hardware): {ctx.Title}: {ctx.Description}",
             cancellationToken: ct);
         var triaged = ctx with { Triage = reply.Text };
-        Console.WriteLine($"[triage] ticket {triaged.TicketId}: {triaged.Triage}");
+        // No ambient Console prints inside executors: durable replay would
+        // re-emit them (P09 caveat). Stage progress surfaces as workflow
+        // output events both hosts (P07 console loop, P09 DurableHost) print.
+        await context.YieldOutputAsync($"[triage] ticket {triaged.TicketId}: {triaged.Triage}", ct);
         await context.SendMessageAsync(triaged, cancellationToken: ct);
     }
 }
@@ -49,7 +52,7 @@ internal sealed class DiagnosticExecutor(SpecialistTools tools)
             $"Ticket: {ctx.Title}. {ctx.Description}\nDiagnose and propose a concise fix (1-3 sentences, action first).",
             cancellationToken: ct);
         var diagnosed = ctx with { Diagnosis = reply.Text, ProposedFix = reply.Text };
-        Console.WriteLine($"[diagnose] ticket {diagnosed.TicketId}: {diagnosed.Diagnosis}");
+        await context.YieldOutputAsync($"[diagnose] ticket {diagnosed.TicketId}: {diagnosed.Diagnosis}", ct);
         await context.SendMessageAsync(diagnosed, cancellationToken: ct);
     }
 }
@@ -72,7 +75,7 @@ internal sealed class EscalationExecutor(AIAgent escalationAgent)
             $"Refine this fix for a Critical incident: {ctx.ProposedFix}",
             cancellationToken: ct);
         var escalated = ctx with { ProposedFix = reply.Text };
-        Console.WriteLine($"[escalate] ticket {escalated.TicketId}: {escalated.ProposedFix}");
+        await context.YieldOutputAsync($"[escalate] ticket {escalated.TicketId}: {escalated.ProposedFix}", ct);
         await context.SendMessageAsync(escalated, cancellationToken: ct);
     }
 }
