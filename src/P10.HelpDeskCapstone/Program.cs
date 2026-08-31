@@ -17,7 +17,8 @@ using P04.HandbookRag;
 using P10.HelpDeskCapstone.Agents;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://localhost:5080");
+// Port comes from ASPNETCORE_URLS (compose: http://+:8080) or the
+// launchSettings profile (local `dotnet run`: http://localhost:5080).
 
 // OTLP traces to the Aspire dashboard (same wiring as P05-P09; the compose
 // stack Task 5 maps the dashboard OTLP receiver).
@@ -71,6 +72,6 @@ app.Run();
 // agents/ ships next to the binary (csproj CopyToOutputDirectory), so the
 // AppContext.BaseDirectory location works for dotnet run and the published
 // Docker image alike.
-static string AgentsDirectory() => Path.Combine(AppContext.BaseDirectory, "agents");
+static string AgentsDirectory() => Path.Combine(AppContext.BaseDirectory, "Definitions");
 
 public partial class Program;

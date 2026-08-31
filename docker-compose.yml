@@ -1,0 +1,25 @@
+# One-command HelpDeskHQ startup: the capstone app + the Aspire dashboard
+# for OTLP traces. Ollama runs on the host (containers reach it through
+# host.docker.internal; the Linux extra_hosts line maps that name to the
+# host gateway).
+services:
+  app:
+    build: { context: ., dockerfile: src/P10.HelpDeskCapstone/Dockerfile }
+    ports:
+      - "5080:8080"
+    environment:
+      OLLAMA_ENDPOINT: http://host.docker.internal:11434
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - dashboard
+
+  dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    # UI on 18888; the standalone image receives OTLP (gRPC) on 18889 —
+    # internal only, reached through the compose network. Frontend keeps the
+    # image default (BrowserToken): the login token prints in the container
+    # logs at startup. Unauthenticated is rejected by this image version.
+    ports:
+      - "18888:18888"
