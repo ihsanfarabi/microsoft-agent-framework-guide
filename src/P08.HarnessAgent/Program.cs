@@ -47,12 +47,32 @@ Directory.CreateDirectory(sessionStateDir);
 AgentSession session;
 if (File.Exists(sessionStatePath))
 {
-    // The JsonDocument is deliberately kept alive for the process lifetime:
-    // deserialized session-state values may hold JsonElements backed by it,
-    // and this CLI holds the restored session until it exits anyway.
-    var saved = JsonDocument.Parse(await File.ReadAllTextAsync(sessionStatePath));
-    session = await agent.DeserializeSessionAsync(saved.RootElement);
-    Console.WriteLine($"[resume] session restored from {sessionStatePath}");
+    try
+    {
+        // The JsonDocument is deliberately kept alive for the process
+        // lifetime: deserialized session-state values may hold JsonElements
+        // backed by it, and this CLI holds the restored session until it
+        // exits anyway.
+        var saved = JsonDocument.Parse(await File.ReadAllTextAsync(sessionStatePath));
+        session = await agent.DeserializeSessionAsync(saved.RootElement);
+        Console.WriteLine($"[resume] session restored from {sessionStatePath}");
+    }
+    catch (Exception ex)
+    {
+        // Corrupt/truncated state must brick startup loudly, not silently.
+        // The unreadable file is moved aside (preserved for inspection and
+        // never overwritten by the next save), the operator is told exactly
+        // what happened and what to do, and the process exits. It does NOT
+        // fall back to a fresh session: a fresh agent would lose the todo
+        // list and history and could redo tickets the killed run finished.
+        var quarantine = $"{sessionStatePath}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
+        File.Move(sessionStatePath, quarantine);
+        Console.Error.WriteLine($"[fatal] saved session state is unreadable: {ex.GetType().Name}: {ex.Message}");
+        Console.Error.WriteLine($"[fatal] moved it to {quarantine} (preserved, not overwritten).");
+        Console.Error.WriteLine($"[fatal] refusing to start a fresh session automatically — that could redo finished tickets.");
+        Console.Error.WriteLine("[fatal] inspect the quarantined file, then start again to begin a fresh batch.");
+        return 1;
+    }
 }
 else
 {
@@ -119,6 +139,8 @@ foreach (var t in await store.ListAsync())
     Console.WriteLine($"{t.Id} | {t.Status} | {t.Priority} | {t.Title}"
         + (t.Notes.Count == 0 ? "" : $" | {t.Notes.Count} note(s)"));
 
+return 0;
+
 /// <summary>Drives one harness run over the session, streaming updates to the
 /// console. Returns the run's approval request, if it surfaced one. The
 /// cancellation token unwinds the enumeration on SIGINT/SIGTERM; a checkpoint
@@ -136,20 +158,8 @@ async Task<ToolApprovalRequestContent?> DriveAsync(ChatMessage prompt)
             // Mid-run snapshot: the harness persists chat history to the
             // session per model call, so a checkpoint taken as a tool call
             // streams out lands between tool-loop iterations holding real
-            // progress. Best effort — a snapshot that fails mid-run must not
-            // take the batch down with it.
-            try
-            {
-                await CheckpointAsync($"mid-run: {call.Name}", cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"\n[checkpoint] skipped ({ex.Message})");
-            }
+            // progress.
+            await CheckpointAsync($"mid-run: {call.Name}", cts.Token);
         }
     }
 
@@ -159,14 +169,31 @@ async Task<ToolApprovalRequestContent?> DriveAsync(ChatMessage prompt)
 
 /// <summary>Serializes the session to <c>work/session-state/session.json</c>
 /// (atomic temp-file move, so a kill during the write cannot leave a torn
-/// file for the next start to rehydrate).</summary>
+/// file for the next start to rehydrate). Failures other than cancellation are
+/// logged and swallowed — a checkpoint problem must never crash the batch
+/// after its work is done, at any of the call sites (mid-run, run-complete,
+/// interrupt): the ticket store is on disk regardless, the next successful
+/// checkpoint supersedes the stale file, and the final ticket-state report
+/// always prints. Cancellation is re-thrown so an interrupt still unwinds the
+/// run instead of being swallowed here.</summary>
 async Task CheckpointAsync(string reason, CancellationToken ct)
 {
-    var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
-    var tmp = sessionStatePath + ".tmp";
-    await File.WriteAllTextAsync(tmp, serialized.GetRawText(), ct);
-    File.Move(tmp, sessionStatePath, overwrite: true);
-    Console.WriteLine($"\n[checkpoint] session state saved ({reason})");
+    try
+    {
+        var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
+        var tmp = sessionStatePath + ".tmp";
+        await File.WriteAllTextAsync(tmp, serialized.GetRawText(), ct);
+        File.Move(tmp, sessionStatePath, overwrite: true);
+        Console.WriteLine($"\n[checkpoint] session state saved ({reason})");
+    }
+    catch (OperationCanceledException)
+    {
+        throw;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"\n[checkpoint] FAILED to save session state ({reason}): {ex.Message}");
+    }
 }
 
 /// <summary>Prints the approval request (tool name + arguments) and reads the
