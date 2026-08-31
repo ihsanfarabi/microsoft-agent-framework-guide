@@ -28,4 +28,11 @@ public class ApprovalPolicyTests
         var call = new FunctionCallContent("callId", name, new Dictionary<string, object?>());
         Assert.True(await ApprovalPolicy.ShouldAutoApprove(call));
     }
+
+    // No test for the ShouldAutoApprove(ToolAutoApprovalRuleContext) overload:
+    // the shipped context's public ctor throws ArgumentNullException unless
+    // handed a non-null AIAgent, and AIAgent is abstract — standing one up
+    // needs a full agent test double, more than this delegation hop is worth.
+    // The overload is a one-line pass-through to the pure decision tested
+    // above, and it is exercised for real by every live batch run.
 }

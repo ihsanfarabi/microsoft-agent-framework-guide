@@ -9,9 +9,15 @@
     loop** — the constraint the plan flagged as the whole reason to reuse one
     session. P02/P06 wired `UseFunctionInvocation` around a bare client and
     trusted the wrapper's loop; P03 built session persistence itself; here the
-    harness does it, and the per-tool-call checkpoints in Program.cs land
-    between tool-loop iterations *holding real progress* (the kill evidence:
-    the mid-flight snapshot already contained 23 chat-history messages).
+    harness does it, and the per-tool-call checkpoints in Program.cs land on
+    completed model turns *holding real progress* (the kill evidence: the
+    mid-flight snapshot already contained 23 chat-history messages).
+  - **Resume hazard on those mid-run checkpoints**: the checkpoint fires when
+    a `FunctionCallContent` *streams out* — potentially BEFORE the tool
+    executes — so a resumed snapshot can contain an issued-but-unexecuted
+    call whose result never persisted. Acceptable: the ticket store is the
+    truth of what actually happened, and a close re-issued from the stale
+    history is re-gated by the approval gate before it can act.
   - **Todo state lives in the session** — the model tracks its own backlog
     via built-in todo tools (5–6 todo items across runs on the 5-ticket
     batch); the killed session's snapshot showed todo 1 complete and todo 2
@@ -26,7 +32,11 @@
   - **Approval state lives in the session** — a standing "always approve this
     tool" rule (`CreateAlwaysApproveToolResponse`) is persisted by the
     harness's `ToolApprovalAgent` as a `ToolApprovalRule` in session state, so
-    it survives the restart too.
+    it survives the restart too. The gate itself is harness-supplied too —
+    P05 intercepted its risky tool calls with hand-written
+    `ToolApprovalMiddleware`; P08 just wraps `close_ticket` in
+    `ApprovalRequiredAIFunction` and the harness's `ToolApprovalAgent` does
+    the intercepting.
 - The inverse lesson: the harness wires **its own function-invocation layer**
   innermost around the client (plus an approval-response-binding layer — the
   console log names `ApprovalResponseBindingChatClient`). Wrapping the client
@@ -171,6 +181,10 @@
   beta and breaks the repo's uniform pinning.
 - The plan's "serialize on exit" couldn't survive a real kill (no exit path)
   — hence the continuous-checkpoint design above.
+- **Spec requirement 6 is only half-met.** "Note formatting pure functions
+  xUnit-tested" materialized for the approval policy (`ApprovalPolicy` is the
+  tested pure function) but not for note formatting: it lives inline in
+  `TicketTools`, not extracted for testing.
 
 ## Failure modes observed
 
@@ -178,11 +192,11 @@
   success to a script checking the exit code.
 - Approval stall with no error: the run just never makes a second request.
 - Model variance: the model sometimes batches all 5 closes in one turn; the
-  one-at-a-time `??=` approval capture in Program.cs tangles when several
-  gated calls queue in a single turn (the model itself reported swapped
-  result messages, 3 tickets left open). Standing approval (`a`) avoids it;
-  the fix — capture *all* `ToolApprovalRequestContent`s per run — is a
-  follow-up.
+  one-at-a-time `??=` approval capture in Program.cs used to tangle when
+  several gated calls queued in a single turn (the model itself reported
+  swapped result messages, 3 tickets left open). Fixed: DriveAsync now
+  captures *all* `ToolApprovalRequestContent`s per run and the loop answers
+  each — one approval-response content per call id in a single user message.
 - `tickets.json` sits inside the file-access root, so the model can read the
   raw store JSON via `file_access_read` (writes stay gated). Harmless here,
   worth remembering when the store holds anything sensitive.

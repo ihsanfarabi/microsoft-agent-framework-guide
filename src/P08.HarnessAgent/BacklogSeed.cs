@@ -5,8 +5,11 @@ namespace P08.HarnessAgent;
 
 /// <summary>
 /// Seeds the demo IT helpdesk backlog — the work queue the P08 harness agent
-/// will pick tickets from. Idempotent: re-running against an already-seeded
-/// store is a no-op, so a crashed run can simply be started again.
+/// will pick tickets from. Idempotent per title: only backlog titles not
+/// already present in the store are created, so re-running after a crash
+/// mid-seed (e.g. after 2 of the 5 creates) resumes to exactly the full
+/// backlog with no duplicates, and a re-run against a fully seeded store is
+/// a no-op.
 /// </summary>
 public static class BacklogSeed
 {
@@ -21,8 +24,9 @@ public static class BacklogSeed
 
     public static async Task RunAsync(ITicketStore store)
     {
-        if ((await store.ListAsync()).Count >= Backlog.Length) return;
+        var present = (await store.ListAsync()).Select(t => t.Title).ToHashSet();
         foreach (var (title, desc, p) in Backlog)
-            await store.CreateAsync(title, desc, p);
+            if (!present.Contains(title))
+                await store.CreateAsync(title, desc, p);
     }
 }

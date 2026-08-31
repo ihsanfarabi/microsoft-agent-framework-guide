@@ -5,8 +5,9 @@ namespace P08.HarnessAgent;
 
 /// <summary>
 /// Approval boundary for the overnight batch: everything the agent may do to
-/// consult and enrich tickets is read-only (create/list/get/note) and passes
-/// the gate automatically; <c>close_ticket</c> is the one irreversible action,
+/// consult and enrich tickets is non-destructive (create/list/get/note — they
+/// mutate the store, but nothing already recorded is lost) and passes the
+/// gate automatically; <c>close_ticket</c> is the one irreversible action,
 /// so it falls through to a human prompt instead. The rule joins the harness's
 /// auto-approval list alongside the MAF file-access rule — a <see langword="false"/>
 /// return is not a rejection, it just means "next rule / human decides".
@@ -15,7 +16,7 @@ public static class ApprovalPolicy
 {
     /// <summary>Wire names that never require a human: every ticket tool
     /// except <c>close_ticket</c>.</summary>
-    private static readonly HashSet<string> ReadOnly =
+    private static readonly HashSet<string> NonDestructive =
     [
         "create_ticket",
         "list_tickets",
@@ -23,11 +24,11 @@ public static class ApprovalPolicy
         "add_note",
     ];
 
-    /// <summary>True when the call's tool is read-only and may run unattended;
-    /// false for anything else (notably <c>close_ticket</c>), which then needs
-    /// an explicit approval.</summary>
+    /// <summary>True when the call's tool is non-destructive and may run
+    /// unattended; false for anything else (notably <c>close_ticket</c>),
+    /// which then needs an explicit approval.</summary>
     public static ValueTask<bool> ShouldAutoApprove(FunctionCallContent call) =>
-        ValueTask.FromResult(ReadOnly.Contains(call.Name));
+        ValueTask.FromResult(NonDestructive.Contains(call.Name));
 
     /// <summary>
     /// Harness-facing overload: <c>ToolApprovalAgentOptions.AutoApprovalRules</c>

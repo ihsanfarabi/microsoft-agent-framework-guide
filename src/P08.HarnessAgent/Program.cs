@@ -112,18 +112,22 @@ using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context 
 // Canonical harness drive loop (MAF get-started doc): the multi-step run
 // progresses as streaming updates are enumerated. close_ticket is an
 // ApprovalRequiredAIFunction, so when the model asks to close, the harness
-// ends the run surfacing a ToolApprovalRequestContent — answer it on the
-// console (y/n/a) and resume the same session; "a" records a standing
-// rule, after which later closes auto-pass with no prompt.
-ToolApprovalRequestContent? approvalRequest;
+// ends the run surfacing ToolApprovalRequestContent(s) — answer each on the
+// console (y/n/a) and resume the same session. A single turn can surface
+// SEVERAL pending calls at once (the model sometimes bursts all its closes
+// in one go): every request is collected and answered, one approval-response
+// content per call in a single user message (the harness's
+// ApprovalResponseBindingChatClient matches responses to calls by call id).
+// "a" records a standing rule, after which later closes auto-pass with no
+// prompt.
+IReadOnlyList<ToolApprovalRequestContent> approvalRequests;
 try
 {
-    approvalRequest = await DriveAsync(new ChatMessage(ChatRole.User, "Work the ticket backlog."));
-    while (approvalRequest is not null && !cts.IsCancellationRequested)
+    approvalRequests = await DriveAsync(new ChatMessage(ChatRole.User, "Work the ticket backlog."));
+    while (approvalRequests.Count > 0 && !cts.IsCancellationRequested)
     {
-        var response = PromptApproval(approvalRequest);
-        approvalRequest = null;
-        approvalRequest = await DriveAsync(new ChatMessage(ChatRole.User, [response]));
+        var responses = approvalRequests.Select(PromptApproval).ToList();
+        approvalRequests = await DriveAsync(new ChatMessage(ChatRole.User, responses));
     }
 }
 catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -142,29 +146,38 @@ foreach (var t in await store.ListAsync())
 return 0;
 
 /// <summary>Drives one harness run over the session, streaming updates to the
-/// console. Returns the run's approval request, if it surfaced one. The
-/// cancellation token unwinds the enumeration on SIGINT/SIGTERM; a checkpoint
-/// is taken per issued tool call (see <see cref="CheckpointAsync"/>) and once
-/// more when the run completes.</summary>
-async Task<ToolApprovalRequestContent?> DriveAsync(ChatMessage prompt)
+/// console. Returns every approval request the run surfaced — a single turn
+/// can queue several gated calls, and each one must be answered or the run
+/// tangles (the final review's multi-request fix). The cancellation token
+/// unwinds the enumeration on SIGINT/SIGTERM; a checkpoint is taken per issued
+/// tool call (see <see cref="CheckpointAsync"/>) and once more when the run
+/// completes.</summary>
+async Task<IReadOnlyList<ToolApprovalRequestContent>> DriveAsync(ChatMessage prompt)
 {
-    ToolApprovalRequestContent? request = null;
+    var requests = new List<ToolApprovalRequestContent>();
     await foreach (var update in agent.RunStreamingAsync(prompt, session, cancellationToken: cts.Token))
     {
         Console.Write(update);
-        request ??= update.Contents.OfType<ToolApprovalRequestContent>().FirstOrDefault();
+        // Collect every pending request, deduped by call id: answering the
+        // same call twice would cross the wires the same way dropping one
+        // did.
+        foreach (var request in update.Contents.OfType<ToolApprovalRequestContent>())
+            if (!requests.Exists(seen => seen.ToolCall.CallId == request.ToolCall.CallId))
+                requests.Add(request);
         foreach (var call in update.Contents.OfType<FunctionCallContent>())
         {
             // Mid-run snapshot: the harness persists chat history to the
             // session per model call, so a checkpoint taken as a tool call
-            // streams out lands between tool-loop iterations holding real
-            // progress.
+            // streams out lands on a completed model turn — though note the
+            // call may not have EXECUTED yet when the checkpoint fires (the
+            // resume hazard documented in NOTES.md; acceptable because the
+            // ticket store is the truth and a re-issued close is re-gated).
             await CheckpointAsync($"mid-run: {call.Name}", cts.Token);
         }
     }
 
     await CheckpointAsync("run complete", cts.Token);
-    return request;
+    return requests;
 }
 
 /// <summary>Serializes the session to <c>work/session-state/session.json</c>
