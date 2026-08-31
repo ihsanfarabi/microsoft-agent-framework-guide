@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using MafDemo.AgentCommon;
 using MafDemo.Core.Stores;
@@ -7,8 +8,10 @@ using Microsoft.Extensions.Logging;
 using P08.HarnessAgent;
 
 // One work/ area next to the binary: the harness agent's file-access store
-// (Handbook copies land in work/handbook/ here) and, in the same tree, the
-// file-backed ticket store the ticket tools mutate. Runtime state, git-ignored.
+// (Handbook copies land in work/handbook/ here), the file-backed ticket store
+// the ticket tools mutate, and — Task 4 — work/session-state/, where the
+// session is checkpointed so a killed batch resumes instead of starting over.
+// Runtime state, git-ignored.
 var workRoot = Path.Combine(AppContext.BaseDirectory, "work");
 Directory.CreateDirectory(workRoot);
 CopyHandbook(workRoot);
@@ -29,29 +32,84 @@ using var loggerFactory = LoggerFactory.Create(b => b
 // HarnessAgent source and at runtime; see the task report).
 var agent = HarnessFacts.Build(OllamaChat.Create(), TicketTools.All(new TicketTools(store)), loggerFactory);
 
-var session = await agent.CreateSessionAsync();
+// Kill-and-resume (Task 4): the session — chat history, todo list, standing
+// approvals, and the session id that file memory is keyed by — is checkpointed
+// to work/session-state/session.json and rehydrated here on the next start.
+// The brief said "serialize on exit", but a mid-batch kill is a SIGINT/SIGTERM,
+// which by default terminates with no exit path; checkpoints are therefore
+// taken continuously (per tool call and per completed run) and the signals are
+// converted to a cooperative wind-down (below), so the kill cannot skip past
+// the last persisted progress.
+var sessionStateDir = Path.Combine(workRoot, "session-state");
+var sessionStatePath = Path.Combine(sessionStateDir, "session.json");
+Directory.CreateDirectory(sessionStateDir);
+
+AgentSession session;
+if (File.Exists(sessionStatePath))
+{
+    // The JsonDocument is deliberately kept alive for the process lifetime:
+    // deserialized session-state values may hold JsonElements backed by it,
+    // and this CLI holds the restored session until it exits anyway.
+    var saved = JsonDocument.Parse(await File.ReadAllTextAsync(sessionStatePath));
+    session = await agent.DeserializeSessionAsync(saved.RootElement);
+    Console.WriteLine($"[resume] session restored from {sessionStatePath}");
+}
+else
+{
+    session = await agent.CreateSessionAsync();
+    Console.WriteLine($"[session] fresh session; checkpoints -> {sessionStatePath}");
+}
+
+// Cooperative shutdown: a kill signal cancels the token instead of letting
+// the runtime's default disposition terminate the process; the streaming
+// loop unwinds through the token and the interrupt-path checkpoint persists
+// the session before exit. SIGTERM — the signal an operator sends to a
+// detached/overnight run — rides PosixSignalRegistration. SIGINT arrives as
+// Console.CancelKeyPress when run at a console (Ctrl+C); note that a process
+// backgrounded from a non-interactive shell inherits SIGINT set to ignore
+// (POSIX), and .NET honors that inherited disposition, so `kill -INT` on a
+// detached run is silently a no-op for both handlers — kill -TERM is the
+// documented way to stop an unattended batch (verified with a minimal repro;
+// see the task report).
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    Console.WriteLine("\n[interrupt] SIGINT received — winding down");
+    cts.Cancel();
+};
+using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+{
+    // Cancel=true suppresses the default SIGTERM disposition — without it the
+    // runtime terminates the process as soon as this callback returns, and
+    // the wind-down below never runs (verified with a minimal repro; see the
+    // task report).
+    context.Cancel = true;
+    Console.WriteLine("\n[interrupt] SIGTERM received — winding down");
+    cts.Cancel();
+});
+
 // Canonical harness drive loop (MAF get-started doc): the multi-step run
 // progresses as streaming updates are enumerated. close_ticket is an
 // ApprovalRequiredAIFunction, so when the model asks to close, the harness
 // ends the run surfacing a ToolApprovalRequestContent — answer it on the
 // console (y/n/a) and resume the same session; "a" records a standing
 // rule, after which later closes auto-pass with no prompt.
-ToolApprovalRequestContent? approvalRequest = null;
-await foreach (var update in agent.RunStreamingAsync("Work the ticket backlog.", session))
+ToolApprovalRequestContent? approvalRequest;
+try
 {
-    Console.Write(update);
-    approvalRequest ??= update.Contents.OfType<ToolApprovalRequestContent>().FirstOrDefault();
-}
-
-while (approvalRequest is not null)
-{
-    var response = PromptApproval(approvalRequest);
-    approvalRequest = null;
-    await foreach (var update in agent.RunStreamingAsync(new ChatMessage(ChatRole.User, [response]), session))
+    approvalRequest = await DriveAsync(new ChatMessage(ChatRole.User, "Work the ticket backlog."));
+    while (approvalRequest is not null && !cts.IsCancellationRequested)
     {
-        Console.Write(update);
-        approvalRequest ??= update.Contents.OfType<ToolApprovalRequestContent>().FirstOrDefault();
+        var response = PromptApproval(approvalRequest);
+        approvalRequest = null;
+        approvalRequest = await DriveAsync(new ChatMessage(ChatRole.User, [response]));
     }
+}
+catch (OperationCanceledException) when (cts.IsCancellationRequested)
+{
+    Console.WriteLine("\n[interrupt] run cancelled mid-batch");
+    await CheckpointAsync("interrupt", CancellationToken.None);
 }
 Console.WriteLine();
 
@@ -60,6 +118,56 @@ Console.WriteLine("\n---- final ticket state ----");
 foreach (var t in await store.ListAsync())
     Console.WriteLine($"{t.Id} | {t.Status} | {t.Priority} | {t.Title}"
         + (t.Notes.Count == 0 ? "" : $" | {t.Notes.Count} note(s)"));
+
+/// <summary>Drives one harness run over the session, streaming updates to the
+/// console. Returns the run's approval request, if it surfaced one. The
+/// cancellation token unwinds the enumeration on SIGINT/SIGTERM; a checkpoint
+/// is taken per issued tool call (see <see cref="CheckpointAsync"/>) and once
+/// more when the run completes.</summary>
+async Task<ToolApprovalRequestContent?> DriveAsync(ChatMessage prompt)
+{
+    ToolApprovalRequestContent? request = null;
+    await foreach (var update in agent.RunStreamingAsync(prompt, session, cancellationToken: cts.Token))
+    {
+        Console.Write(update);
+        request ??= update.Contents.OfType<ToolApprovalRequestContent>().FirstOrDefault();
+        foreach (var call in update.Contents.OfType<FunctionCallContent>())
+        {
+            // Mid-run snapshot: the harness persists chat history to the
+            // session per model call, so a checkpoint taken as a tool call
+            // streams out lands between tool-loop iterations holding real
+            // progress. Best effort — a snapshot that fails mid-run must not
+            // take the batch down with it.
+            try
+            {
+                await CheckpointAsync($"mid-run: {call.Name}", cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[checkpoint] skipped ({ex.Message})");
+            }
+        }
+    }
+
+    await CheckpointAsync("run complete", cts.Token);
+    return request;
+}
+
+/// <summary>Serializes the session to <c>work/session-state/session.json</c>
+/// (atomic temp-file move, so a kill during the write cannot leave a torn
+/// file for the next start to rehydrate).</summary>
+async Task CheckpointAsync(string reason, CancellationToken ct)
+{
+    var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
+    var tmp = sessionStatePath + ".tmp";
+    await File.WriteAllTextAsync(tmp, serialized.GetRawText(), ct);
+    File.Move(tmp, sessionStatePath, overwrite: true);
+    Console.WriteLine($"\n[checkpoint] session state saved ({reason})");
+}
 
 /// <summary>Prints the approval request (tool name + arguments) and reads the
 /// operator's answer: <c>y</c> approves this one call, <c>a</c> approves it and
