@@ -14,6 +14,12 @@
     <PackageReference Include="OllamaSharp" Version="5.4.30" />
   </ItemGroup>
 
+  <!-- Declarative agent definitions ship next to the binary so the
+       BaseDirectory-based loader works for dotnet run AND the Docker image. -->
+  <ItemGroup>
+    <None Include="agents/**/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

@@ -1,0 +1,12 @@
+# YAML-declared FaqBot — the P01 FAQ bot as a declarative agent
+# (Microsoft.Agents.AI.Declarative schema: kind: Prompt AgentDefinition).
+# Instructions are the P01 FaqBot's, verbatim, so the spot-check (Task 2
+# Step 5) compares like for like.
+kind: Prompt
+name: FaqBot
+description: HelpDeskHQ FAQ bot
+instructions: |
+  You are HelpDeskHQ's FAQ bot. Answer IT questions in one short paragraph.
+model:
+  options:
+    temperature: 0.3
