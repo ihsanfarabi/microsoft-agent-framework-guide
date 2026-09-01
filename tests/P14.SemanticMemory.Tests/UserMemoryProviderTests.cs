@@ -172,6 +172,66 @@ public class UserMemoryProviderTests
     }
 
     [Fact]
+    public async Task ProvideAIContextAsync_never_recalls_for_non_external_user_message()
+    {
+        // The store DOES contain a fact this query would recall — if the
+        // provider honored the External-only filter, no recall call happens
+        // and no memory message is injected.
+        var store = CreateStore();
+        await store.AddAsync(UserMemoryProvider.DefaultUserId, FactText);
+        var provider = CreateProvider(store, new ScriptedExtractor([]));
+
+        var injected = new ChatMessage(ChatRole.User, RecallQuery)
+            .WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, "other-provider");
+        var context = await provider.InvokingAsync(new AIContextProvider.InvokingContext(
+            TestAgent.Instance, session: null, new AIContext { Messages = [injected] }));
+
+        var message = Assert.Single(context.Messages!);
+        Assert.Same(injected, message); // input echoed back unchanged, no memory message
+    }
+
+    [Fact]
+    public async Task ProvideAIContextAsync_never_recalls_for_blank_user_message()
+    {
+        var store = CreateStore();
+        await store.AddAsync(UserMemoryProvider.DefaultUserId, FactText);
+        var provider = CreateProvider(store, new ScriptedExtractor([]));
+
+        var context = await provider.InvokingAsync(new AIContextProvider.InvokingContext(
+            TestAgent.Instance, session: null, new AIContext { Messages = [new ChatMessage(ChatRole.User, "   ")] }));
+
+        var message = Assert.Single(context.Messages!);
+        Assert.Equal("   ", message.Text); // no memory message injected
+    }
+
+    [Fact]
+    public async Task TryLoadAsync_with_corrupt_facts_file_starts_empty_instead_of_throwing()
+    {
+        // FactMemoryStore.LoadAsync throws on corrupt JSON (only a MISSING file
+        // is fail-soft); the startup guard must degrade to an empty store.
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        await File.WriteAllTextAsync(path, "{ not valid json ]");
+
+        var store = new FactMemoryStore(CreateEmbedder());
+        string? reported = null;
+        var loaded = await FactStoreStartup.TryLoadAsync(store, path, warning => reported = warning);
+
+        Assert.False(loaded);
+        Assert.Contains("unreadable", reported);
+        Assert.Empty(await store.RecallAsync(UserMemoryProvider.DefaultUserId, RecallQuery)); // store still usable
+        File.Delete(path);
+    }
+
+    [Fact]
+    public async Task TryLoadAsync_with_missing_file_reports_success()
+    {
+        var loaded = await FactStoreStartup.TryLoadAsync(
+            CreateStore(), Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json"));
+
+        Assert.True(loaded);
+    }
+
+    [Fact]
     public void ParseFacts_parses_plain_and_fenced_arrays()
     {
         Assert.Equal(["User prefers email over phone"],

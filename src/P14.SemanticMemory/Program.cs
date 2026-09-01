@@ -58,7 +58,14 @@ var memory = new ChatHistoryMemoryProvider(
 // DOES recall — exactly where the T1 baseline cannot.
 const string factsPath = "p14-facts.json";
 var factStore = new FactMemoryStore(embedder);
-await factStore.LoadAsync(factsPath);
+// Load persisted facts. LoadAsync itself is fail-soft only for a MISSING file
+// (corrupt JSON throws there), so startup goes through TryLoadAsync: a corrupt
+// or unreadable file is warned about and the store starts empty (P08
+// convention: startup survives corrupt persisted state) instead of crashing.
+if (!await FactStoreStartup.TryLoadAsync(factStore, factsPath))
+{
+    Console.WriteLine($"(facts file {factsPath} unreadable — starting with an empty store)");
+}
 var userMemory = new UserMemoryProvider(
     factStore,
     userId: "demo-user",
