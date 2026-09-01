@@ -37,8 +37,41 @@ IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync();
 Console.WriteLine($"--- MCP server tools: {string.Join(", ", mcpTools.Select(t => t.Name))} ---");
 Console.WriteLine();
 
-var mcpAgent = TicketBot.CreateWithMcp(store, mcpTools.Cast<AITool>());
+// Second MCP client: our own P12 knowledge server over stdio. Its project
+// path is resolved the same walk-up way as sandboxPath above; `dotnet run`
+// rebuilds it if stale and hosts it as a child process (msbuild chatter goes
+// to stderr, so the JSON-RPC stream on stdout stays clean). Disposed at the
+// end of this scope, which shuts the child down.
+string knowledgeProjectPath = Path.GetFullPath(Path.Combine(
+    AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "P12.McpKnowledgeServer"));
+
+await using var knowledgeClient = await McpClient.CreateAsync(new StdioClientTransport(new()
+{
+    Name = "MafCorpKnowledge",
+    Command = "dotnet",
+    Arguments = ["run", "--project", knowledgeProjectPath],
+}));
+IList<McpClientTool> knowledgeMcpTools = await knowledgeClient.ListToolsAsync();
+Console.WriteLine($"--- knowledge MCP server tools: {string.Join(", ", knowledgeMcpTools.Select(t => t.Name))} ---");
+Console.WriteLine();
+
+// One agent, both tool sets: filesystem tools + knowledge tools ride
+// alongside the built-in ticket function tools.
+var mergedMcpTools = mcpTools.Concat(knowledgeMcpTools).ToList();
+Console.WriteLine($"--- merged MCP tools ({mergedMcpTools.Count}): {string.Join(", ", mergedMcpTools.Select(t => t.Name))} ---");
+
+bool hasFileSystemTools = mergedMcpTools.Any(t => t.Name is "list_directory" or "read_file");
+bool hasKnowledgeTool = mergedMcpTools.Any(t => t.Name == "search_knowledge");
+Console.WriteLine($"--- merged-set check: filesystem={hasFileSystemTools}, search_knowledge={hasKnowledgeTool} ---");
+Console.WriteLine();
+if (!hasFileSystemTools || !hasKnowledgeTool)
+    throw new InvalidOperationException(
+        $"merged MCP tool set is incomplete (filesystem={hasFileSystemTools}, search_knowledge={hasKnowledgeTool})");
+
+var mcpAgent = TicketBot.CreateWithMcp(store, mergedMcpTools.Cast<AITool>());
 Console.WriteLine(await mcpAgent.RunAsync("What files are in the sandbox and what does the readme say?"));
+Console.WriteLine();
+Console.WriteLine(await mcpAgent.RunAsync("What's the policy if my password expires?"));
 Console.WriteLine();
 
 Console.WriteLine("--- final store state ---");
