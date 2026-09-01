@@ -81,6 +81,44 @@ catch (Exception ex)
 }
 Console.WriteLine($"Model received: {FormatPathDemos.DescribeFormat(recorder.LastResponseFormat)}");
 
+// Path 4: schema-compliance fallback. Non-generic RunAsync with the schema as a
+// per-call ChatOptions.ResponseFormat (the only form where the caller's format
+// reaches the model — RunAsync<T> always overrides it), ProbeJson validation,
+// and one re-prompt with the schema embedded in the prompt text when the model
+// ignores the format. Target is TicketDraft, mirroring path 3's raw shape.
+Console.WriteLine();
+Console.WriteLine("=== Path 4: schema-compliance fallback (probe + one schema-embedded re-prompt) ===");
+// OLLAMA_MODEL=<local model> OLLAMA_ENDPOINT=http://localhost:11434 dotnet run —
+// with a local, schema-capable model the ResponseFormat is enforced and this
+// fallback never fires; the default cloud-routed model (glm-5.3-flash:cloud)
+// treats the schema as advisory, which is what the fallback exists for.
+string ollamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? string.Empty;
+Console.WriteLine(string.IsNullOrWhiteSpace(ollamaModel) || ollamaModel.Contains(":cloud", StringComparison.Ordinal)
+    ? "schema enforced=false (ollama cloud ignored schema — ollama/ollama#12362)"
+    : $"schema enforcement expected (local model '{ollamaModel}') — fallback expected to be a no-op");
+int callsBeforeFallback = recorder.Calls;
+try
+{
+    TicketDraft? draft = await FormatPathDemos.RunWithFallbackAsync(agent, TicketMessage);
+    bool fallbackFired = recorder.Calls - callsBeforeFallback == 2;
+    if (draft is not null)
+    {
+        Console.WriteLine(fallbackFired
+            ? $"Re-prompt recovered it. Title: {draft.Title} / Priority: {draft.Priority}"
+            : $"First response complied. Title: {draft.Title} / Priority: {draft.Priority}");
+        Console.WriteLine($"Description: {draft.Description}");
+    }
+    else
+    {
+        Console.WriteLine("Fallback exhausted — both calls non-compliant, returning default (null).");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"FAILED: {ex.Message}");
+}
+Console.WriteLine($"Model received: {FormatPathDemos.DescribeFormat(recorder.LastResponseFormat)}");
+
 /// <summary>
 /// Program-internal demo methods for the three response-format paths.
 /// Each performs exactly one agent run; printing stays in the top-level program.
@@ -151,6 +189,18 @@ internal static class FormatPathDemos
         }
     }
 
+    /// <summary>
+    /// Path 4: schema-compliance fallback — non-generic run carrying a per-call
+    /// TicketDraft schema response format, with one schema-embedded re-prompt
+    /// when the model's raw text does not deserialize as <see cref="TicketDraft"/>.
+    /// </summary>
+    public static Task<TicketDraft?> RunWithFallbackAsync(AIAgent agent, string message) =>
+        ComplianceFallback.RunJsonWithFallbackAsync<TicketDraft>(agent, message,
+            new ChatClientAgentRunOptions
+            {
+                ChatOptions = new ChatOptions { Instructions = DraftInstructions },
+            });
+
     /// <summary>One-line description of the format that reached the model.</summary>
     public static string DescribeFormat(ChatResponseFormat? format) => format switch
     {
@@ -177,10 +227,15 @@ internal sealed class ResponseFormatRecorder(IChatClient inner) : IChatClient
 {
     public ChatResponseFormat? LastResponseFormat { get; private set; }
 
+    /// <summary>Total model calls seen — the fallback path counts calls to know
+    /// whether its re-prompt fired (2 = fallback, 1 = first response complied).</summary>
+    public int Calls { get; private set; }
+
     public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         LastResponseFormat = options?.ResponseFormat;
+        Calls++;
         return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
     }
 
