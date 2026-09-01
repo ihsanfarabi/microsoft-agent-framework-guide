@@ -32,12 +32,21 @@ if (Environment.GetEnvironmentVariable("P15_TRACE_CONSOLE") == "1")
 }
 using var telemetry = telemetryBuilder.Build();
 
+// Optional scenario selector: `dotnet run -- B` runs only scenario B. The
+// failure demo (scripts/demo15-failure.sh) uses this so the failing run and
+// the still-succeeds run are separate process invocations — under the
+// PROPAGATE decision below, one failed run exits non-zero and never rolls
+// into the next scenario in the same process.
+string[] only = args.Select(a => a.Trim().ToUpperInvariant())
+                    .Where(a => a is "A" or "B")
+                    .Distinct()
+                    .ToArray();
+
 // Step 1: discover both remote agents off their well-known agent cards (P09
 // HelpDeskClient pattern — the resolver takes the host base URI only; the
 // card path is the package default /.well-known/agent-card.json).
-AIAgent diagnosis = await new A2ACardResolver(new Uri("http://localhost:5200")).GetAIAgentAsync();
-AIAgent inventory = await new A2ACardResolver(new Uri("http://localhost:5199")).GetAIAgentAsync();
-Console.WriteLine($"[discovered] {diagnosis.Name} (localhost:5200) and {inventory.Name} (localhost:5199)");
+AIAgent diagnosis = await DiscoverAsync("DiagnosisAgent", new Uri("http://localhost:5200"), "/a2a/diagnosis");
+AIAgent inventory = await DiscoverAsync("InventoryAgent", new Uri("http://localhost:5199"), "/a2a/inventory");
 
 // Step 3: two scenarios in one run of the program. A is software-only and
 // must provably SKIP the inventory hop; B implicates hardware and takes both
@@ -48,12 +57,34 @@ Console.WriteLine($"[discovered] {diagnosis.Name} (localhost:5200) and {inventor
     ("B", "IT ticket: my laptop will not power on at all. The charger LED is dark and the battery shows no charge after an hour plugged in."),
 ];
 
-foreach (var (label, ticket) in scenarios)
+try
 {
-    Console.WriteLine();
-    Console.WriteLine($"=== scenario {label} ===");
-    Console.WriteLine($"[ticket] {ticket}");
-    await RunScenarioAsync(diagnosis, inventory, ticket);
+    foreach (var (label, ticket) in scenarios)
+    {
+        if (only.Length > 0 && !only.Contains(label))
+        {
+            continue;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"=== scenario {label} ===");
+        Console.WriteLine($"[ticket] {ticket}");
+        await RunScenarioAsync(diagnosis, inventory, ticket);
+    }
+}
+catch (WorkflowFailedException failure)
+{
+    // HANDLE-OR-PROPAGATE DECISION: PROPAGATE (see the long comment in
+    // RunScenarioAsync). The catch here exists ONLY to print the diagnostics
+    // an operator needs and exit non-zero — no retry (retries/transient-fault
+    // policy is a durable-workflow-host concern; noted for P16), and no
+    // continue-to-the-next-scenario: a failed scenario terminates the run.
+    // The original exception rides along as InnerException — printed in full,
+    // never swallowed or rethrow-mangled.
+    Console.Error.WriteLine();
+    Console.Error.WriteLine($"[FAILED] scenario did not complete: {failure.Message}");
+    Console.Error.WriteLine($"[FAILED] original exception: {failure.InnerException}");
+    return 1;
 }
 
 return 0;
@@ -97,7 +128,9 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
     // (returns ValueTask<Run>); we use the streaming variant for the
     // P07-style event loop, which surfaces failures as WorkflowErrorEvent.
     await using StreamingRun handle = await InProcessExecution.RunStreamingAsync(workflow, ticket);
+    bool diagnosisHit = false;
     bool inventoryHit = false;
+    WorkflowErrorEvent? errorEvent = null;
     await foreach (WorkflowEvent evt in handle.WatchStreamAsync())
     {
         switch (evt)
@@ -107,18 +140,49 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
                 {
                     inventoryHit = true;
                 }
+                else if (output.ExecutorId.StartsWith("DiagnosisAgent", StringComparison.Ordinal))
+                {
+                    diagnosisHit = true;
+                }
                 Console.WriteLine($"[hop output] {output.ExecutorId}: {response.Text}");
                 break;
             case WorkflowOutputEvent output:
                 Console.WriteLine($"[done] {output.Data}");
                 break;
             case WorkflowErrorEvent error:
+                // Streaming-mode failure surface: a remote hop dying mid-run
+                // arrives here as a WorkflowErrorEvent carrying the original
+                // exception (no rethrow-mangling — it is printed verbatim).
+                errorEvent = error;
                 Console.Error.WriteLine($"[workflow error] {error.Exception}");
                 break;
             case ExecutorFailedEvent failure:
                 Console.Error.WriteLine($"[executor failed: {failure.ExecutorId}] {failure.Data}");
                 break;
         }
+    }
+
+    if (errorEvent is not null)
+    {
+        // HANDLE-OR-PROPAGATE DECISION: PROPAGATE. The event loop has already
+        // printed the raw exception ([workflow error] above). We do NOT retry
+        // and we do NOT fall through to the next scenario as if nothing
+        // happened — retries against a dead remote hop are a policy concern
+        // for a durable workflow host (P16 note), not for this console
+        // orchestrator. Instead the original exception is wrapped (InnerException
+        // preserved, message verbatim in the wrapper text) with the one thing
+        // a raw socket error may not make obvious: WHICH hop died, i.e. which
+        // A2A endpoint the workflow was calling. The wrapper propagates to the
+        // top-level handler, which prints it and exits non-zero.
+        string failingHop = inventoryHit
+            ? "Report (local) — after the InventoryAgent hop"
+            : diagnosisHit
+                ? "InventoryAgent — A2A endpoint http://localhost:5199/a2a/inventory (P09 InventoryAgentService on port 5199)"
+                : "DiagnosisAgent — A2A endpoint http://localhost:5200/a2a/diagnosis (DiagnosisAgentService on port 5200)";
+        Console.Error.WriteLine($"[failed hop] {failingHop}");
+        Exception original = errorEvent.Exception
+            ?? new InvalidOperationException("the workflow reported an error without an exception");
+        throw new WorkflowFailedException(failingHop, original);
     }
 
     // Route summary derived from what actually ran (no condition side
@@ -148,3 +212,49 @@ static bool SoftwareOnly(List<ChatMessage>? result) =>
 static bool ContainsHardware(List<ChatMessage> messages) =>
     messages.Any(m => m.Role == ChatRole.Assistant &&
                       m.Text?.Contains("NEEDS-HARDWARE", StringComparison.OrdinalIgnoreCase) == true);
+
+// Card discovery with an honest down-service fallback. When the remote
+// service is STOPPED the resolver cannot fetch /.well-known/agent-card.json —
+// but aborting there would move the failure to startup, before the workflow
+// even runs, and the failure-visibility point of this task is precisely that
+// a dead remote hop dies INSIDE the workflow and surfaces mid-run as a
+// WorkflowErrorEvent. So when the card is unreachable we bind the configured
+// endpoint by hand (same URL the service maps: MapA2AHttpJson("inventory",
+// "/a2a/inventory") → HTTP+JSON binding) and let the first real A2A call
+// produce the genuine connection error at the hop. Nothing is retried or
+// masked: the fallback only substitutes the discovery round-trip, and the
+// [discovery failed] line says so in the transcript.
+static async Task<AIAgent> DiscoverAsync(string name, Uri host, string a2aPath)
+{
+    try
+    {
+        AIAgent agent = await new A2ACardResolver(host).GetAIAgentAsync();
+        Console.WriteLine($"[discovered] {agent.Name} ({host.Authority}) via agent card");
+        return agent;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[discovery failed] {name} at {host}: {ex.Message}");
+        Console.WriteLine($"[discovery fallback] binding configured endpoint {host.GetLeftPart(UriPartial.Authority)}{a2aPath} anyway — the failure will surface at the hop, inside the workflow");
+        var card = new AgentCard
+        {
+            Name = name,
+            SupportedInterfaces =
+            [
+                new AgentInterface { ProtocolBinding = "HTTP+JSON", Url = $"{host.GetLeftPart(UriPartial.Authority)}{a2aPath}" },
+            ],
+        };
+        return card.AsAIAgent();
+    }
+}
+
+/// <summary>
+/// Raised when the event loop observed a <see cref="WorkflowErrorEvent"/>.
+/// The original exception is preserved untouched as <see cref="Exception.InnerException"/>
+/// (never swallowed, never rethrow-mangled); the wrapper text adds the hop
+/// annotation — which A2A endpoint the workflow was calling when it died — so
+/// an operator can see WHICH hop failed even when the raw socket error only
+/// says "connection refused".
+/// </summary>
+internal sealed class WorkflowFailedException(string failingHop, Exception inner)
+    : Exception($"workflow failed at: {failingHop}. Original exception: [{inner.GetType().Name}] {inner.Message}", inner);
