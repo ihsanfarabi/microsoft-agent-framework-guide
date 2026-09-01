@@ -178,7 +178,7 @@ Observed behavior and failure modes:
   and rewrites the file, so the clear survives a restart). Both need a store
   enumeration the T2 store did not expose: `ListAsync`/`ClearAsync` are a
   trivial passthrough added in T4, as pre-ruled in the SDD ledger.
-- `scripts/demo14.sh` live-tested twice end to end (2026-09-01): process 1
+- `scripts/demo14.sh` live-tested three times end to end (2026-09-01): process 1
   tell → fact `User prefers email over phone for anything urgent` persisted;
   fresh process 2 recall answered "Based on what I have on file, you prefer
   **email** over phone for urgent contact". The script checks Ollama and both

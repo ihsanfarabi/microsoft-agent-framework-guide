@@ -25,16 +25,10 @@ PROJECT="$ROOT/src/P14.SemanticMemory"
 PREF="${1:-Remember: I prefer email over phone for anything urgent.}"
 QUESTION="${2:-What is the best way to reach me about an urgent outage?}"
 SCRATCH="$(mktemp -d /tmp/demo14.XXXXXX)"
-APP_PID=""
 
 cleanup() {
-    # Phases run in the foreground and exit on their own; nothing to kill
-    # unless the script itself was interrupted mid-`dotnet run`.
-    if [ -n "$APP_PID" ]; then
-        pkill -P "$APP_PID" 2>/dev/null || true
-        kill "$APP_PID" 2>/dev/null || true
-        wait "$APP_PID" 2>/dev/null || true
-    fi
+    # Both app phases run in the foreground and exit on their own — the only
+    # thing to clean is the scratch dir.
     rm -rf "$SCRATCH"
 }
 trap cleanup EXIT
@@ -83,7 +77,17 @@ dotnet run --no-build --project "$PROJECT" -- recall "$QUESTION" | tee recall.lo
 
 # --- 5. Verdict ------------------------------------------------------------------
 
-if grep -qi 'email' recall.log; then
+# The asserted keyword is derived from the preference (first significant
+# word), so a custom "$1" asserts its own content instead of always grepping
+# "email". The default preference yields "email"; a preference with no
+# significant word falls back to it.
+KEYWORD="$(printf '%s' "$PREF" \
+    | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9 \n' | tr -s ' ' '\n' \
+    | awk 'length($0) >= 4 && $0 !~ /^(remember|prefer|please|that|this|with|want|need|really|always|never|when|what|about)$/ {print; exit}')"
+KEYWORD="${KEYWORD:-email}"
+info "asserting answer mentions: $KEYWORD"
+
+if grep -qi "$KEYWORD" recall.log; then
     say "OK: a fresh process answered from memory it was never told in-process —"
     say "    the fact store carried the preference across the restart."
 else
