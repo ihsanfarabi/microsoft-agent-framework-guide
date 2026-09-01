@@ -2,7 +2,7 @@
 
 # MafDemo — Microsoft Agent Framework curriculum
 
-Fourteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
+Fifteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
 chatbot to a durable multi-agent workflow — all on a local Ollama model, all
 runnable end to end. Built against the 1.19.0 prerelease line; API
 divergences from the docs are recorded per project in `docs/projects/*/NOTES.md`.
@@ -25,6 +25,10 @@ flowchart LR
     subgraph P06/P07
         W[Workflow graph<br/>executors + edges] --> P07[P07 resolution]
     end
+    subgraph P15 - Distributed workflow
+        OG[Triage - Diagnosis - Inventory - Report<br/>one WorkflowBuilder graph] --> DX[DiagnosisAgent<br/>A2A :5200]
+        OG -. NEEDS-HARDWARE .-> IX[InventoryAgent<br/>A2A :5199]
+    end
 ```
 
 ## Projects
@@ -45,6 +49,7 @@ flowchart LR
 | 12 | `P12.McpKnowledgeServer` | custom MCP server (`ModelContextProtocol` SDK) | Own stdio MCP server (`search_knowledge` over the handbook, token-overlap scorer) consumed by P02 alongside its filesystem server |
 | 13 | `P13.StreamingApproval` | `UseToolApproval` round trip, SSE streaming | Self-hosted chat endpoint pauses mid-stream on destructive tool calls — an `event: approval` frame carries the request, a second POST votes, the same session resumes (`scripts/demo13.sh`) |
 | 14 | `P14.SemanticMemory` | `ChatHistoryMemoryProvider` + custom `AIContextProvider` + MEVD vectors | Two memory shapes side by side: MAF's turn memory (cross-session, process-local) beside a durable fact store — a tiny extractor agent distills each turn to third-person facts, dedupes at cosine ≥ 0.9, persists to JSON, and a fresh process recalls them (`scripts/demo14.sh`) |
+| 15 | `P15.OrchestratorHost` | graph workflows across remote A2A agents | One local `WorkflowBuilder` graph with two remote hops (DiagnosisAgent :5200, P09's InventoryAgent :5199) — a conditional edge on the diagnosis text skips the inventory hop, agent nodes are `ChatProtocol` executors (`List<ChatMessage>` + `TurnToken`, not `AgentResponse`), and killing the inventory service fails visibly at the hop as a `WorkflowErrorEvent`, never at startup (`scripts/demo15-failure.sh`) |
 
 ## Run
 
@@ -63,10 +68,11 @@ curl -s http://localhost:5080/v1/chat/completions -H 'Content-Type: application/
 Any single project:
 
 ```bash
-dotnet run --project src/P01.HelloAgent            # every project: P01..P14
+dotnet run --project src/P01.HelloAgent            # every project: P01..P15
 RUN_EVALS=1 dotnet test tests/MafDemo.Core.Tests --filter EvalSuite
 scripts/demo13.sh                                  # P13 live approval demo (curl SSE)
 scripts/demo14.sh                                  # P14 two-process memory demo (tell, quit, recall)
+scripts/demo15-failure.sh                          # P15 kill-service demo (dead A2A hop fails visibly)
 ```
 
 Durable resume (P09): start the dts-emulator container, run the host, interrupt

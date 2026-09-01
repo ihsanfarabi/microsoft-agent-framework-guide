@@ -2,15 +2,16 @@
 
 [![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
 
-14 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
+15 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
 - **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
 - Per-project spec + plan + field notes: `docs/projects/NN-name/`
 
-All 14 implemented and verified: 111 unit tests green, the capstone compose
+All 15 implemented and verified: 111 unit tests green, the capstone compose
 stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
-and OTLP traces into the Aspire dashboard.
+and OTLP traces into the Aspire dashboard, and one workflow graph spans two
+remote A2A agent services with a conditional edge skipping a dead hop.
 
 Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 
@@ -40,6 +41,7 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 12 | mcp-knowledge-server | custom MCP stdio server, MCP client | Handbook knowledge server for the ticket bot |
 | 13 | streaming-approval | `UseToolApproval`, SSE streaming, HITL | Delete needs an operator vote mid-stream |
 | 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD vector store | Remembers your preferences across process restarts |
+| 15 | distributed-workflow | graph workflows across A2A, conditional edges, failure visibility | One graph, two remote agent hops — skip a dead one, visibly |
 
 ## Setup (once)
 
@@ -77,4 +79,7 @@ docs say vs what actually happens. Highlights:
   `.State(...)`), scopes are nullable-string values with no `Search` field,
   and `InMemoryVectorStore` is process-local — durable memory needs the
   custom provider + file-backed fact store (P14)
+- Agent nodes are `ChatProtocol` executors: an agent node's edge payload is
+  `List<ChatMessage>` + `TurnToken`, never `AgentResponse` — a condition typed
+  on the plan's snippet can never fire, silently (P15)
 - Full index: `docs/projects/*/NOTES.md`
