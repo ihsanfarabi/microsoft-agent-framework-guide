@@ -22,7 +22,6 @@ public class FactMemoryStoreTests
         ["I prefer email over phone calls."] = EmailVector, // near-duplicate rewrite
         [ParisFact] = ParisVector,
         [EmailQuery] = EmailVector,
-        ["how do you reach me"] = EmailVector,
     });
 
     [Fact]
@@ -75,6 +74,25 @@ public class FactMemoryStoreTests
     }
 
     [Fact]
+    public async Task LoadAsync_missing_file_starts_empty()
+    {
+        var store = new FactMemoryStore(CreateEmbedder());
+        await store.LoadAsync(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json")); // must not throw
+        Assert.Empty(await store.RecallAsync("u1", EmailQuery));
+    }
+
+    [Fact]
+    public async Task AddAsync_unknown_text_never_collides_with_table_vectors()
+    {
+        var store = new FactMemoryStore(CreateEmbedder());
+        await store.AddAsync("u1", EmailFact);
+        await store.AddAsync("u1", "zzz qqq xxy"); // not in the table; must not dedupe-upsert EmailFact
+
+        var recalled = await store.RecallAsync("u1", EmailQuery, topK: 10);
+        Assert.Equal(2, recalled.Count);
+    }
+
+    [Fact]
     public async Task Recall_on_empty_store_returns_empty_list()
     {
         var store = new FactMemoryStore(CreateEmbedder());
@@ -103,18 +121,36 @@ public class FactMemoryStoreTests
     }
 
     /// <summary>
-    /// Offline fake: same string always yields the same vector (table lookup),
-    /// unknown strings fall back to a deterministic one-hot so distinct inputs
-    /// stay far apart. No model, no network.
+    /// Offline fake: same string always yields the same vector (table lookup).
+    /// Unknown strings fall back to a one-hot drawn only from indices no table
+    /// vector occupies, so an unknown input can never score cosine 1.0 against
+    /// a known one and accidentally trigger dedupe-upsert. No model, no network.
     /// </summary>
     private sealed class FakeEmbedder(IReadOnlyDictionary<string, float[]> table) : IEmbeddingGenerator<string, Embedding<float>>
     {
+        private readonly int[] _freeIndices = Enumerable.Range(0, Dims)
+            .Except(table.Values.Select(v => Array.FindIndex(v, static x => x != 0)).Where(i => i >= 0))
+            .ToArray();
+
         public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values, EmbeddingGenerationOptions? options = null, CancellationToken cancellationToken = default)
         {
             var embeddings = values.Select(text =>
             {
-                var vector = table.TryGetValue(text, out var known) ? known : OneHot(Math.Abs(text.GetHashCode()) % Dims);
-                return new Embedding<float>(vector);
+                if (table.TryGetValue(text, out var known))
+                {
+                    return new Embedding<float>(known);
+                }
+
+                // Deterministic within the process; never collides with a
+                // table vector (falls back to the zero vector, which scores
+                // cosine 0 against everything, if the table claimed all dims).
+                if (_freeIndices.Length == 0)
+                {
+                    return new Embedding<float>(new float[Dims]);
+                }
+
+                var index = _freeIndices[(uint)text.GetHashCode() % _freeIndices.Length];
+                return new Embedding<float>(OneHot(index));
             });
             return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
         }
