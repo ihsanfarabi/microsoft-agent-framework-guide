@@ -16,6 +16,7 @@
     <Project Path="src/P10.HelpDeskCapstone/P10.HelpDeskCapstone.csproj" />
     <Project Path="src/P11.StructuredOutput/P11.StructuredOutput.csproj" />
     <Project Path="src/P12.McpKnowledgeServer/P12.McpKnowledgeServer.csproj" />
+    <Project Path="src/P13.StreamingApproval/P13.StreamingApproval.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
@@ -25,5 +26,6 @@
     <Project Path="tests/P07.ResolutionWorkflow.Tests/P07.ResolutionWorkflow.Tests.csproj" />
     <Project Path="tests/P08.HarnessAgent.Tests/P08.HarnessAgent.Tests.csproj" />
     <Project Path="tests/P11.StructuredOutput.Tests/P11.StructuredOutput.Tests.csproj" />
+    <Project Path="tests/P13.StreamingApproval.Tests/P13.StreamingApproval.Tests.csproj" />
   </Folder>
 </Solution>
