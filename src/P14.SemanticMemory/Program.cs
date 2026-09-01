@@ -1,10 +1,12 @@
 using CommunityToolkit.VectorData.InMemory;
 using MafDemo.AgentCommon;
+using MafDemo.Core.Memory;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
 using OllamaSharp;
 using P14.SemanticMemory;
+using P14.SemanticMemory.Memory;
 
 // Start OTel tracing first so the provider is listening before any model call.
 using var telemetry = Telemetry.Start("P14.SemanticMemory");
@@ -44,6 +46,24 @@ var memory = new ChatHistoryMemoryProvider(
         new ChatHistoryMemoryProviderScope { UserId = "demo-user" },
         new ChatHistoryMemoryProviderScope { UserId = "demo-user" }));
 
+// ---- Task 3: fact-extraction memory, running alongside the T1 baseline ----
+// A second AIContextProvider with a different memory strategy: after each run
+// a tiny extractor agent turns the conversation turn into durable third-person
+// facts ("User prefers email over phone"), which are upserted into a
+// FactMemoryStore (dedupe — cosine >= 0.9, user-scoped — is owned by the
+// store, not the provider); before each run the facts most similar to the
+// latest user message are injected as a system message. Unlike the
+// chat-history collection above, the fact store persists to a JSON file, so
+// `dotnet run -- tell` followed by `dotnet run -- recall` in a fresh process
+// DOES recall — exactly where the T1 baseline cannot.
+const string factsPath = "p14-facts.json";
+var factStore = new FactMemoryStore(embedder);
+await factStore.LoadAsync(factsPath);
+var userMemory = new UserMemoryProvider(
+    factStore,
+    userId: "demo-user",
+    extractor: new ChatClientFactExtractor(OllamaChat.Create()));
+
 var agent = new ChatClientAgent(OllamaChat.Create(), new ChatClientAgentOptions
 {
     Name = "MemoryBot",
@@ -52,7 +72,7 @@ var agent = new ChatClientAgent(OllamaChat.Create(), new ChatClientAgentOptions
     {
         Instructions = "Answer briefly. Use remembered context from earlier conversations when it is relevant.",
     },
-    AIContextProviders = [memory],
+    AIContextProviders = [memory, userMemory],
 });
 
 // Modes:
@@ -63,10 +83,10 @@ var agent = new ChatClientAgent(OllamaChat.Create(), new ChatClientAgentOptions
 switch (args.FirstOrDefault())
 {
     case null:
-        await ScriptedDemoAsync(agent);
+        await ScriptedDemoAsync(agent, factStore, factsPath);
         break;
     case "tell":
-        await TellAsync(agent);
+        await TellAsync(agent, factStore, factsPath);
         break;
     case "recall":
         await RecallAsync(agent);
@@ -78,13 +98,14 @@ switch (args.FirstOrDefault())
 
 // Session 1 states a preference; session 2 asks a question that only makes
 // sense if the memory provider injected session 1's messages as context.
-static async Task ScriptedDemoAsync(ChatClientAgent agent)
+static async Task ScriptedDemoAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath)
 {
     AgentSession sessionA = await agent.CreateSessionAsync();
     Console.WriteLine("== session A (new) ==");
     Console.WriteLine("user> Remember: I prefer email over phone.");
     var tell = await agent.RunAsync("Remember: I prefer email over phone.", sessionA);
     Console.WriteLine($"bot> {tell.Text}");
+    await factStore.SaveAsync(factsPath); // fact memory persists across processes
 
     // A different session id — same process, but a fresh conversation with
     // no shared chat history; only the vector-backed memory provider can
@@ -96,14 +117,17 @@ static async Task ScriptedDemoAsync(ChatClientAgent agent)
     Console.WriteLine($"bot> {recall.Text}");
 }
 
-static async Task TellAsync(ChatClientAgent agent)
+static async Task TellAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath)
 {
     AgentSession session = await agent.CreateSessionAsync();
     Console.WriteLine("== session A (new) ==");
     Console.WriteLine("user> Remember: I prefer email over phone.");
     var tell = await agent.RunAsync("Remember: I prefer email over phone.", session);
     Console.WriteLine($"bot> {tell.Text}");
-    Console.WriteLine("(process exiting — InMemoryVectorStore contents are gone)");
+    // Unlike the in-process chat-history store, the fact store persists:
+    // `dotnet run -- recall` in a fresh process will still find the fact.
+    await factStore.SaveAsync(factsPath);
+    Console.WriteLine($"(facts saved to {factsPath}; chat-history store contents are gone)");
 }
 
 static async Task RecallAsync(ChatClientAgent agent)

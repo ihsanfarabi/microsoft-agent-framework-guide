@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- The tests construct AIContextProvider.InvokingContext/InvokedContext
+         directly; their ctors are marked [Experimental("MAAI001")] in
+         Microsoft.Agents.AI 1.19.0. Overriding the protected virtuals (as
+         UserMemoryProvider does) does not need this; direct construction does. -->
+    <NoWarn>$(NoWarn);MAAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\P14.SemanticMemory\P14.SemanticMemory.csproj" />
+    <ProjectReference Include="..\..\src\MafDemo.Core\MafDemo.Core.csproj" />
+  </ItemGroup>
+
+</Project>

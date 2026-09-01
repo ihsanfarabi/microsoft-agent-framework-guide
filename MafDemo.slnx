@@ -28,5 +28,6 @@
     <Project Path="tests/P08.HarnessAgent.Tests/P08.HarnessAgent.Tests.csproj" />
     <Project Path="tests/P11.StructuredOutput.Tests/P11.StructuredOutput.Tests.csproj" />
     <Project Path="tests/P13.StreamingApproval.Tests/P13.StreamingApproval.Tests.csproj" />
+    <Project Path="tests/P14.SemanticMemory.Tests/P14.SemanticMemory.Tests.csproj" />
   </Folder>
 </Solution>
