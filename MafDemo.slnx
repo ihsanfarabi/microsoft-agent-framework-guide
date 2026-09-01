@@ -15,6 +15,7 @@
     <Project Path="src/P09.InventoryAgentService/P09.InventoryAgentService.csproj" />
     <Project Path="src/P10.HelpDeskCapstone/P10.HelpDeskCapstone.csproj" />
     <Project Path="src/P11.StructuredOutput/P11.StructuredOutput.csproj" />
+    <Project Path="src/P12.McpKnowledgeServer/P12.McpKnowledgeServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
