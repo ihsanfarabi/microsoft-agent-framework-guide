@@ -2,7 +2,7 @@
 
 # MafDemo — Microsoft Agent Framework curriculum
 
-Twelve projects that walk the Microsoft Agent Framework (MAF) from a one-file
+Thirteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
 chatbot to a durable multi-agent workflow — all on a local Ollama model, all
 runnable end to end. Built against the 1.19.0 prerelease line; API
 divergences from the docs are recorded per project in `docs/projects/*/NOTES.md`.
@@ -43,6 +43,7 @@ flowchart LR
 | 10 | `P10.HelpDeskCapstone` | everything together | OpenAI-compatible chat + A2A server + declarative YAML agents + RAG + evals + CI + compose |
 | 11 | `P11.StructuredOutput` | typed `RunAsync<T>`, JSON response formats | Typed triage via `RunAsync<T>`, per-call vs raw format paths, schema-compliance probe + one-retry fallback |
 | 12 | `P12.McpKnowledgeServer` | custom MCP server (`ModelContextProtocol` SDK) | Own stdio MCP server (`search_knowledge` over the handbook, token-overlap scorer) consumed by P02 alongside its filesystem server |
+| 13 | `P13.StreamingApproval` | `UseToolApproval` round trip, SSE streaming | Self-hosted chat endpoint pauses mid-stream on destructive tool calls — an `event: approval` frame carries the request, a second POST votes, the same session resumes (`scripts/demo13.sh`) |
 
 ## Run
 
@@ -61,8 +62,9 @@ curl -s http://localhost:5080/v1/chat/completions -H 'Content-Type: application/
 Any single project:
 
 ```bash
-dotnet run --project src/P01.HelloAgent            # every project: P01..P10
+dotnet run --project src/P01.HelloAgent            # every project: P01..P13
 RUN_EVALS=1 dotnet test tests/MafDemo.Core.Tests --filter EvalSuite
+scripts/demo13.sh                                  # P13 live approval demo (curl SSE)
 ```
 
 Durable resume (P09): start the dts-emulator container, run the host, interrupt

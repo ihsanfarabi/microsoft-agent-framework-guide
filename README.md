@@ -2,13 +2,13 @@
 
 [![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
 
-12 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
+13 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
 - **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
 - Per-project spec + plan + field notes: `docs/projects/NN-name/`
 
-All 12 implemented and verified: 65 unit tests green, the capstone compose
+All 13 implemented and verified: 82 unit tests green, the capstone compose
 stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
 and OTLP traces into the Aspire dashboard.
 
@@ -38,6 +38,7 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 10 | helpdesk-capstone | self-host, declarative YAML, evals, CI | Full product |
 | 11 | structured-output | typed `RunAsync<T>`, JSON response formats | Typed ticket triage |
 | 12 | mcp-knowledge-server | custom MCP stdio server, MCP client | Handbook knowledge server for the ticket bot |
+| 13 | streaming-approval | `UseToolApproval`, SSE streaming, HITL | Delete needs an operator vote mid-stream |
 
 ## Setup (once)
 
@@ -67,4 +68,7 @@ docs say vs what actually happens. Highlights:
   build — agent YAML lives in `Definitions/` (P10)
 - Durable-workflow payload typing between executors is the roughest doc-vs-
   reality gap in the prerelease (P09)
+- `MapOpenAIChatCompletions` silently drops approval content (`_ => null` in
+  the content switch, no inbound response channel) — why P13's approval flow
+  needs a custom SSE endpoint (P13)
 - Full index: `docs/projects/*/NOTES.md`
