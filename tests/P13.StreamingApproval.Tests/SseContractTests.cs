@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MafDemo.Core.Domain;
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.AI;
@@ -128,7 +129,175 @@ public class SseContractTests
         Assert.Equal(1, endpointStore.Count);
     }
 
+    [Fact]
+    public async Task Approve_resume_executes_tool_and_streams_resumed_turn()
+    {
+        // A real ticket in the store, and a script whose gated call targets
+        // exactly that id: the resumed turn may only reach the second script
+        // (the post-tool-result narration) if the parked request was answered
+        // and the delete actually executed against the store.
+        var store = NewStore();
+        var ticket = await store.CreateAsync("Broken printer", "Dead on arrival", TicketPriority.High);
+        using var factory = FactoryWith(
+            new ScriptedClient(ScriptedClient.DeleteTicketTurn("call-1", ticket.Id.ToString()),
+                ScriptedClient.DeletedText),
+            store);
+        var client = factory.CreateClient();
+
+        using var message = new StringContent("""{"text":"delete the broken ticket"}""", Encoding.UTF8,
+            "application/json");
+        using var first = await client.PostAsync("/conversations/cA/messages", message);
+        var firstBody = await first.Content.ReadAsStringAsync();
+        var requestId = ExtractRequestId(firstBody);
+        Assert.Contains(ticket.Id, (await store.ListAsync()).Select(t => t.Id)); // nothing deleted while paused
+
+        using var vote = new StringContent(
+            $$"""{"requestId":"{{requestId}}","approved":true,"reason":"operator approved"}""", Encoding.UTF8,
+            "application/json");
+        using var resume = await client.PostAsync("/approvals/cA", vote);
+
+        Assert.Equal("text/event-stream", resume.Content.Headers.ContentType?.MediaType);
+        var resumed = await resume.Content.ReadAsStringAsync();
+        Assert.Contains("data: {\"delta\":", resumed);
+        Assert.Contains("Deleted the ticket.", resumed);
+        Assert.DoesNotContain("event: approval", resumed);
+        Assert.DoesNotContain(ticket.Id, (await store.ListAsync()).Select(t => t.Id)); // the tool really ran
+        Assert.Equal(0, factory.Services.GetRequiredService<PendingApprovals>().Count);
+    }
+
+    [Fact]
+    public async Task Decline_resume_narrates_refusal_and_leaves_store_intact()
+    {
+        var store = NewStore();
+        var ticket = await store.CreateAsync("Broken printer", "Dead on arrival", TicketPriority.High);
+        using var factory = FactoryWith(
+            new ScriptedClient(ScriptedClient.DeleteTicketTurn("call-1", ticket.Id.ToString()),
+                ScriptedClient.RefusalText),
+            store);
+        var client = factory.CreateClient();
+
+        using var message = new StringContent("""{"text":"delete the broken ticket"}""", Encoding.UTF8,
+            "application/json");
+        using var first = await client.PostAsync("/conversations/cD/messages", message);
+        var requestId = ExtractRequestId(await first.Content.ReadAsStringAsync());
+
+        using var vote = new StringContent(
+            $$"""{"requestId":"{{requestId}}","approved":false,"reason":"operator declined"}""", Encoding.UTF8,
+            "application/json");
+        using var resume = await client.PostAsync("/approvals/cD", vote);
+        var resumed = await resume.Content.ReadAsStringAsync();
+
+        // The refusal is narrated as a delta frame — the model relays the
+        // denial the harness handed back as the tool outcome.
+        Assert.Contains("the operator declined", resumed);
+        Assert.DoesNotContain("event: approval", resumed);
+        // And the store is untouched: a decline never reaches the tool body.
+        Assert.Contains(ticket.Id, (await store.ListAsync()).Select(t => t.Id));
+    }
+
+    [Fact]
+    public async Task ApproveAlways_resume_marks_policy_and_autoapproves_next_gated_call()
+    {
+        var store = NewStore();
+        var ticket = await store.CreateAsync("Broken printer", "Dead on arrival", TicketPriority.High);
+        // Turn 2 gates the SAME tool again: with the standing rule recorded by
+        // the always-approve response, this call must auto-pass (no second
+        // approval event) and the run advances to turn 3's closing text.
+        using var factory = FactoryWith(
+            new ScriptedClient(ScriptedClient.DeleteTicketTurn("call-1", ticket.Id.ToString()),
+                ScriptedClient.RepeatDeleteTurn(ticket.Id.ToString()), ScriptedClient.DoneText),
+            store);
+        var client = factory.CreateClient();
+
+        using var message = new StringContent("""{"text":"delete the broken ticket"}""", Encoding.UTF8,
+            "application/json");
+        using var first = await client.PostAsync("/conversations/cE/messages", message);
+        var requestId = ExtractRequestId(await first.Content.ReadAsStringAsync());
+
+        using var vote = new StringContent($$"""{"requestId":"{{requestId}}","approveAlways":true}""",
+            Encoding.UTF8, "application/json");
+        using var resume = await client.PostAsync("/approvals/cE", vote);
+        var resumed = await resume.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("event: approval", resumed);
+        Assert.Contains("All done.", resumed);
+        Assert.DoesNotContain(ticket.Id, (await store.ListAsync()).Select(t => t.Id));
+        Assert.Equal(0, factory.Services.GetRequiredService<PendingApprovals>().Count);
+    }
+
+    [Fact]
+    public async Task Resumed_turn_can_pause_again_on_a_new_gated_call()
+    {
+        // Loop safety: the resumed run must be able to pause AGAIN — the same
+        // parking + framing shape as /messages, so the client answers a new
+        // requestId with another /approvals post (no recursion server-side).
+        var store = NewStore();
+        var ticket = await store.CreateAsync("Broken printer", "Dead on arrival", TicketPriority.High);
+        using var factory = FactoryWith(
+            new ScriptedClient(ScriptedClient.DeleteTicketTurn("call-1", ticket.Id.ToString()),
+                ScriptedClient.DeleteThenEscalateTurn(ticket.Id.ToString())),
+            store);
+        var client = factory.CreateClient();
+
+        using var message = new StringContent("""{"text":"delete the broken ticket"}""", Encoding.UTF8,
+            "application/json");
+        using var first = await client.PostAsync("/conversations/cF/messages", message);
+        var requestId = ExtractRequestId(await first.Content.ReadAsStringAsync());
+
+        using var vote = new StringContent($$"""{"requestId":"{{requestId}}","approved":true}""", Encoding.UTF8,
+            "application/json");
+        using var resume = await client.PostAsync("/approvals/cF", vote);
+        var resumed = await resume.Content.ReadAsStringAsync();
+
+        var approvalAt = resumed.IndexOf("event: approval", StringComparison.Ordinal);
+        Assert.True(approvalAt >= 0, "resumed turn surfacing a new gated call must emit another approval event");
+        Assert.Contains("\"tool\":\"escalate_ticket\"", resumed);
+        var newRequestId = ExtractRequestId(resumed);
+        Assert.NotEqual(requestId, newRequestId);
+
+        var approvals = factory.Services.GetRequiredService<PendingApprovals>();
+        Assert.Equal(1, approvals.Count);
+        Assert.True(approvals.TryTake(newRequestId, out var pending));
+        Assert.Equal("escalate_ticket", (pending!.Request.ToolCall as FunctionCallContent)?.Name);
+    }
+
+    [Fact]
+    public async Task Approvals_endpoint_returns_404_for_unknown_request_id()
+    {
+        using var factory = FactoryWith(
+            new ScriptedClient(ScriptedClient.DeleteTicketTurn("call-1", "00000000-0000-0000-0000-000000000009")));
+        var client = factory.CreateClient();
+
+        using var vote = new StringContent("""{"requestId":"no-such-request","approved":true}""", Encoding.UTF8,
+            "application/json");
+        using var response = await client.PostAsync("/approvals/cZ", vote);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     // ---- helpers -----------------------------------------------------------
+
+    /// <summary>A factory whose chat client is the scripted fake and whose
+    /// ticket store is the caller's own file-backed one — so the gated call's
+    /// ticket id can be a real, pre-created ticket and the store's tombstone
+    /// state is directly assertable.</summary>
+    private static WebApplicationFactory<Program> FactoryWith(ScriptedClient client,
+        DeletableTicketStore? store = null) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.ConfigureServices(services =>
+        {
+            services.AddSingleton<IChatClient>(client);
+            if (store is not null) services.AddSingleton(store);
+        }));
+
+    /// <summary>Pulls the requestId out of a body's first
+    /// <c>event: approval</c> frame — the round-trip correlation id.</summary>
+    private static string ExtractRequestId(string body)
+    {
+        var payload = body.Split("event: approval\ndata: ", 2)[1].Split("\n\n", 2)[0];
+        using var doc = JsonDocument.Parse(payload);
+        return doc.RootElement.GetProperty("requestId").GetString()
+               ?? throw new InvalidOperationException("approval frame carried no requestId");
+    }
 
     /// <summary>A fresh file-backed store in a throwaway directory — the
     /// same concrete store production runs, so the tool bodies run against
@@ -192,6 +361,57 @@ public sealed class ScriptedClient(params ChatResponseUpdate[][] scripts) : ICha
     public static readonly ChatResponseUpdate[] FinalText =
     [
         new(ChatRole.Assistant, "There are no tickets.\n"),
+    ];
+
+    /// <summary>Post-resume narration after the delete tool result returns —
+    /// reached only when the parked approval was answered and the call really
+    /// executed.</summary>
+    public static readonly ChatResponseUpdate[] DeletedText =
+    [
+        new(ChatRole.Assistant, "Deleted the ticket.\n"),
+    ];
+
+    /// <summary>Post-resume narration after a DECLINED approval — the harness
+    /// hands the refusal back as the tool outcome and the model relays it.</summary>
+    public static readonly ChatResponseUpdate[] RefusalText =
+    [
+        new(ChatRole.Assistant, "Understood - I won't delete the ticket; the operator declined.\n"),
+    ];
+
+    /// <summary>Closing text after a second gated call auto-passes — the
+    /// approveAlways proof that the run advanced instead of pausing again.</summary>
+    public static readonly ChatResponseUpdate[] DoneText =
+    [
+        new(ChatRole.Assistant, "All done.\n"),
+    ];
+
+    /// <summary>Builds the opening turn: a text delta then a gated
+    /// delete_ticket call against the given ticket id.</summary>
+    public static ChatResponseUpdate[] DeleteTicketTurn(string callId, string ticketId) =>
+    [
+        new(ChatRole.Assistant, "Deleting that ticket for you.\n"),
+        new(ChatRole.Assistant, [new FunctionCallContent(callId, "delete_ticket",
+            new Dictionary<string, object?> { ["id"] = ticketId })]),
+    ];
+
+    /// <summary>A follow-up turn that gates the SAME tool again — the
+    /// approveAlways probe: with the standing rule recorded the call must
+    /// auto-pass and the script advance to <see cref="DoneText"/>.</summary>
+    public static ChatResponseUpdate[] RepeatDeleteTurn(string ticketId) =>
+    [
+        new(ChatRole.Assistant, "Deleted it.\n"),
+        new(ChatRole.Assistant, [new FunctionCallContent("call-2", "delete_ticket",
+            new Dictionary<string, object?> { ["id"] = ticketId })]),
+    ];
+
+    /// <summary>A follow-up turn that gates a DIFFERENT destructive tool —
+    /// the re-pause probe: the resumed run must surface a second approval
+    /// event and end the stream there, not swallow the pause.</summary>
+    public static ChatResponseUpdate[] DeleteThenEscalateTurn(string ticketId) =>
+    [
+        new(ChatRole.Assistant, "Deleted it.\n"),
+        new(ChatRole.Assistant, [new FunctionCallContent("call-3", "escalate_ticket",
+            new Dictionary<string, object?> { ["id"] = ticketId, ["reason"] = "customer escalating" })]),
     ];
 
     public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,

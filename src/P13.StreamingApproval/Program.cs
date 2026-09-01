@@ -13,8 +13,8 @@ using P13.StreamingApproval.Agents;
 // round-trip. The in-process loop it HTTP-ifies lives in P08's
 // DriveAsync/PromptApproval: the streaming run pauses on a sensitive tool
 // call, the request is surfaced (there: console, here: SSE), and a second
-// stimulus (there: keyboard input, here: a second HTTP request — a later
-// task) resumes the same session.
+// stimulus (there: keyboard input, here: a second HTTP request —
+// POST /approvals/{id}) resumes the same session.
 //
 // One work/ area next to the binary holds the file-backed ticket store the
 // tools mutate (P08 pattern). Runtime state, git-ignored.
@@ -49,7 +49,8 @@ var app = builder.Build();
 // operator must decide), the request + session are parked in PendingApprovals
 // and an `event: approval` frame carries the requestId, tool name and
 // arguments to the client. The response then ends — the conversation stays
-// paused until the (later-task) resume endpoint answers the approval.
+// paused until POST /approvals/{id} answers the approval, resuming the
+// stored session as SSE.
 app.MapPost("/conversations/{id}/messages",
     async (string id, MessageRequest body, HttpContext http,
         AIAgent agent, PendingApprovals approvals, ConversationSessions sessions,
@@ -59,45 +60,124 @@ app.MapPost("/conversations/{id}/messages",
 
         http.Response.ContentType = "text/event-stream";
         http.Response.Headers.CacheControl = "no-cache";
-        // Frames go straight to the response stream as UTF-8 bytes: a
-        // StreamWriter's AutoFlush performs a synchronous flush, which Kestrel
-        // (and the test server even more strictly) forbids on the response.
-        try
-        {
-            await foreach (var frame in SseWriter.EnumerateFrames(
-                         agent.RunStreamingAsync(new ChatMessage(ChatRole.User, body.Text), session,
-                             cancellationToken: ct),
-                         id, session, approvals, ct))
-            {
-                await http.Response.Body.WriteAsync(Encoding.UTF8.GetBytes(frame), ct);
-            }
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("ToolApprovalRequestContent"))
-        {
-            // A session with an unanswered approval request cannot take a new
-            // free-text message: the harness's FunctionInvokingChatClient
-            // refuses to send pending ToolApprovalRequestContents back to the
-            // model without matching responses (observed live — the exception
-            // fires before the first model call of the continuation). Until
-            // the resume endpoint exists (next task), that contract violation
-            // surfaces as an SSE error frame instead of a 500.
-            var payload = JsonSerializer.Serialize(new
-            {
-                error = "approval-required: this conversation has an unanswered tool approval — resume it with the requestId from the approval event",
-                detail = ex.Message,
-            });
-            await http.Response.Body.WriteAsync(Encoding.UTF8.GetBytes($"event: error\ndata: {payload}\n\n"), ct);
-        }
-
-        await http.Response.Body.FlushAsync(ct);
+        await StreamSseFramesAsync(http.Response,
+            SseWriter.EnumerateFrames(
+                agent.RunStreamingAsync(new ChatMessage(ChatRole.User, body.Text), session,
+                    cancellationToken: ct),
+                id, session, approvals, ct),
+            ct);
+        return Results.Empty;
     });
 
+// POST /approvals/{conversationId} {"requestId":"...","approved":true,
+// "reason":"...","approveAlways":false} -> text/event-stream of the RESUMED
+// turn. Atomically takes the parked request (one decision consumes one
+// entry), answers it exactly as P08's PromptApproval does —
+// CreateResponse(approved, reason), or CreateAlwaysApproveToolResponse for a
+// standing always-approve rule — and re-runs the STORED session with the
+// response riding in a user message. The resumed run streams through the same
+// SseWriter shape as /messages, so if IT surfaces another
+// ToolApprovalRequestContent the run pauses again: the new request is parked
+// and a fresh `event: approval` frame ends this response. Loop-safe by
+// construction — the loop is the client posting /approvals again, never
+// server-side recursion.
+app.MapPost("/approvals/{conversationId}",
+        async (string conversationId, ApprovalVote vote, HttpContext http,
+            AIAgent agent, PendingApprovals approvals, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(vote.RequestId))
+                return Results.BadRequest(new { error = "requestId is required" });
+
+            if (!approvals.TryTake(vote.RequestId, out var pending))
+                return Results.NotFound(new
+                {
+                    error = "unknown requestId: already answered, or the process restarted " +
+                            "(pending approvals are in-memory and do not survive a restart)",
+                });
+
+            if (!string.Equals(pending.ConversationId, conversationId, StringComparison.Ordinal))
+            {
+                // Put it back untouched (the store is keyed by requestId and
+                // this take holds the only claim): resuming under another
+                // conversation id would park any NEW requests from the resumed
+                // run under the wrong conversation.
+                approvals.Add(pending.ConversationId, pending.Request, pending.Session);
+                return Results.Conflict(new
+                {
+                    error = $"requestId '{vote.RequestId}' belongs to conversation '{pending.ConversationId}'",
+                });
+            }
+
+            // P08's PromptApproval mapping: approve once / always / decline —
+            // the reason carries the operator's words back to the model.
+            AIContent approvalResponse = vote.ApproveAlways
+                ? pending.Request.CreateAlwaysApproveToolResponse(vote.Reason ?? "operator: always approve this tool")
+                : pending.Request.CreateResponse(vote.Approved,
+                    vote.Reason ?? (vote.Approved ? "operator approved" : "operator declined"));
+
+            // The resume message is the paired approval response riding in a
+            // user message (P08's DriveAsync resume shape): the harness's
+            // ApprovalResponseBindingChatClient matches it to the session's
+            // parked request by call id, executes (or refuses) the call, and
+            // the model narrates the outcome as the resumed stream.
+            var resumeMessage = new ChatMessage(ChatRole.User, [approvalResponse]);
+
+            http.Response.ContentType = "text/event-stream";
+            http.Response.Headers.CacheControl = "no-cache";
+            await StreamSseFramesAsync(http.Response,
+                SseWriter.EnumerateFrames(
+                    agent.RunStreamingAsync(resumeMessage, pending.Session, cancellationToken: ct),
+                    conversationId, pending.Session, approvals, ct),
+                ct);
+            return Results.Empty;
+        });
+
 app.Run();
+
+/// <summary>Writes SSE frames to the response as UTF-8 bytes — the one shape
+/// both SSE endpoints stream through (a StreamWriter's AutoFlush performs a
+/// synchronous flush, which Kestrel — and the test server even more strictly —
+/// forbids on the response, so frames go straight to <c>Response.Body</c>).
+/// A session with an unanswered approval request cannot take a stimulus that
+/// does not answer it: the harness's FunctionInvokingChatClient refuses to
+/// send pending ToolApprovalRequestContents back to the model without matching
+/// responses (observed live — the exception fires before the first model call).
+/// That contract violation surfaces as an SSE <c>event: error</c> frame
+/// instead of a 500.</summary>
+static async Task StreamSseFramesAsync(HttpResponse response,
+    IAsyncEnumerable<string> frames, CancellationToken ct)
+{
+    try
+    {
+        await foreach (var frame in frames)
+            await response.Body.WriteAsync(Encoding.UTF8.GetBytes(frame), ct);
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("ToolApprovalRequestContent"))
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            error = "approval-required: this conversation has an unanswered tool approval — resume it with the requestId from the approval event",
+            detail = ex.Message,
+        });
+        await response.Body.WriteAsync(Encoding.UTF8.GetBytes($"event: error\ndata: {payload}\n\n"), ct);
+    }
+
+    await response.Body.FlushAsync(ct);
+}
 
 /// <summary>Request body of the message endpoint. A missing/empty text is
 /// rejected by the minimal-API validation below rather than reaching the
 /// model.</summary>
 public sealed record MessageRequest(string Text);
+
+/// <summary>Request body of the approval endpoint: which parked request to
+/// answer and how. <c>approved</c> is the one-vote decision (absent = false —
+/// omitting a decision never grants one); <c>reason</c> carries the
+/// operator's words to the model; <c>approveAlways</c> upgrades the vote to a
+/// standing always-approve rule for that tool (P08's "a" answer), which
+/// implies approval of this call.</summary>
+public sealed record ApprovalVote(
+    string RequestId, bool Approved = false, string? Reason = null, bool ApproveAlways = false);
 
 /// <summary>Per-conversation live sessions: first message creates the
 /// <see cref="AgentSession"/>, later messages continue it — the same session

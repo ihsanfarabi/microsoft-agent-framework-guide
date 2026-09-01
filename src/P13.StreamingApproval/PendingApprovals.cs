@@ -53,7 +53,8 @@ public sealed class PendingApprovals
     /// <summary>Atomically removes and returns the pending approval for
     /// <paramref name="requestId"/> — one decision consumes one entry, so a
     /// double-posted resume cannot answer the same call twice.</summary>
-    public bool TryTake(string requestId, out PendingApproval? approval)
+    public bool TryTake(string requestId,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out PendingApproval? approval)
     {
         approval = null;
         if (_pending.TryRemove(requestId, out var taken))
