@@ -2,7 +2,7 @@
 
 # MafDemo — Microsoft Agent Framework curriculum
 
-Thirteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
+Fourteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
 chatbot to a durable multi-agent workflow — all on a local Ollama model, all
 runnable end to end. Built against the 1.19.0 prerelease line; API
 divergences from the docs are recorded per project in `docs/projects/*/NOTES.md`.
@@ -44,6 +44,7 @@ flowchart LR
 | 11 | `P11.StructuredOutput` | typed `RunAsync<T>`, JSON response formats | Typed triage via `RunAsync<T>`, per-call vs raw format paths, schema-compliance probe + one-retry fallback |
 | 12 | `P12.McpKnowledgeServer` | custom MCP server (`ModelContextProtocol` SDK) | Own stdio MCP server (`search_knowledge` over the handbook, token-overlap scorer) consumed by P02 alongside its filesystem server |
 | 13 | `P13.StreamingApproval` | `UseToolApproval` round trip, SSE streaming | Self-hosted chat endpoint pauses mid-stream on destructive tool calls — an `event: approval` frame carries the request, a second POST votes, the same session resumes (`scripts/demo13.sh`) |
+| 14 | `P14.SemanticMemory` | `ChatHistoryMemoryProvider` + custom `AIContextProvider` + MEVD vectors | Two memory shapes side by side: MAF's turn memory (cross-session, process-local) beside a durable fact store — a tiny extractor agent distills each turn to third-person facts, dedupes at cosine ≥ 0.9, persists to JSON, and a fresh process recalls them (`scripts/demo14.sh`) |
 
 ## Run
 
@@ -62,9 +63,10 @@ curl -s http://localhost:5080/v1/chat/completions -H 'Content-Type: application/
 Any single project:
 
 ```bash
-dotnet run --project src/P01.HelloAgent            # every project: P01..P13
+dotnet run --project src/P01.HelloAgent            # every project: P01..P14
 RUN_EVALS=1 dotnet test tests/MafDemo.Core.Tests --filter EvalSuite
 scripts/demo13.sh                                  # P13 live approval demo (curl SSE)
+scripts/demo14.sh                                  # P14 two-process memory demo (tell, quit, recall)
 ```
 
 Durable resume (P09): start the dts-emulator container, run the host, interrupt

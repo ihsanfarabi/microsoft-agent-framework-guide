@@ -2,13 +2,13 @@
 
 [![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
 
-13 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
+14 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
 - **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
 - Per-project spec + plan + field notes: `docs/projects/NN-name/`
 
-All 13 implemented and verified: 82 unit tests green, the capstone compose
+All 14 implemented and verified: 111 unit tests green, the capstone compose
 stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
 and OTLP traces into the Aspire dashboard.
 
@@ -39,11 +39,13 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 11 | structured-output | typed `RunAsync<T>`, JSON response formats | Typed ticket triage |
 | 12 | mcp-knowledge-server | custom MCP stdio server, MCP client | Handbook knowledge server for the ticket bot |
 | 13 | streaming-approval | `UseToolApproval`, SSE streaming, HITL | Delete needs an operator vote mid-stream |
+| 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD vector store | Remembers your preferences across process restarts |
 
 ## Setup (once)
 
 ```bash
 ollama pull glm-5.3-flash:cloud   # tool-calling + vision model, 1M ctx
+ollama pull bge-m3                # embeddings (RAG + semantic memory)
 ollama serve                      # ensure daemon on localhost:11434
 dotnet --version                  # .NET 10
 ```
@@ -71,4 +73,8 @@ docs say vs what actually happens. Highlights:
 - `MapOpenAIChatCompletions` silently drops approval content (`_ => null` in
   the content switch, no inbound response channel) — why P13's approval flow
   needs a custom SSE endpoint (P13)
+- The real 1.19.0 `ChatHistoryMemoryProvider` takes a single ctor (no fluent
+  `.State(...)`), scopes are nullable-string values with no `Search` field,
+  and `InMemoryVectorStore` is process-local — durable memory needs the
+  custom provider + file-backed fact store (P14)
 - Full index: `docs/projects/*/NOTES.md`
