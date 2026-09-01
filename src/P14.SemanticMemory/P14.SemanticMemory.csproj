@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MafDemo.AgentCommon\MafDemo.AgentCommon.csproj" />
+    <ProjectReference Include="..\MafDemo.Core\MafDemo.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Ships appsettings.json next to the binary so OllamaChat/OllamaEmbedding can read it. -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.19.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.30" />
+    <!-- InMemoryVectorStore: the SK connectors package (1.74.0-preview) was built
+         against vectordata abstractions 10.1 and crashes at search time with
+         TypeLoadException (VectorSearchFilter) under the 10.7.0 abstractions that
+         Microsoft.Agents.AI 1.19.0 pins. The CommunityToolkit 1.0.0 package is
+         built against abstractions 10.7.0 — the same store the official MAF
+         ChatHistoryMemoryProvider sample uses. -->
+    <PackageReference Include="CommunityToolkit.VectorData.InMemory" Version="1.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
