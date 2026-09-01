@@ -14,6 +14,13 @@ public enum TicketCategory { Hardware, Network, Account, Security, Other }
 public record TriageDecision(TicketCategory Category, TicketPriority Priority, string Summary);
 
 /// <summary>
+/// Raw-path target: a support-ticket draft the caller requests with a per-call
+/// <see cref="ChatResponseFormat"/> carrying a hand-built JSON schema, then
+/// deserializes itself — no <c>RunAsync&lt;T&gt;</c> involved.
+/// </summary>
+public record TicketDraft(string Title, TicketPriority Priority, string Description);
+
+/// <summary>
 /// P11 baseline: a <see cref="ChatClientAgent"/> whose responses are deserialized
 /// into <see cref="TriageDecision"/> via <c>RunAsync&lt;T&gt;</c>, plus a
 /// model-free probe that validates JSON text the same way the typed run's
