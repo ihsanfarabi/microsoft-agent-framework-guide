@@ -14,6 +14,7 @@
     <Project Path="src/P09.HelpDeskClient/P09.HelpDeskClient.csproj" />
     <Project Path="src/P09.InventoryAgentService/P09.InventoryAgentService.csproj" />
     <Project Path="src/P10.HelpDeskCapstone/P10.HelpDeskCapstone.csproj" />
+    <Project Path="src/P11.StructuredOutput/P11.StructuredOutput.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MafDemo.Core.Tests/MafDemo.Core.Tests.csproj" />
@@ -22,5 +23,6 @@
     <Project Path="tests/P06.TriageComposition.Tests/P06.TriageComposition.Tests.csproj" />
     <Project Path="tests/P07.ResolutionWorkflow.Tests/P07.ResolutionWorkflow.Tests.csproj" />
     <Project Path="tests/P08.HarnessAgent.Tests/P08.HarnessAgent.Tests.csproj" />
+    <Project Path="tests/P11.StructuredOutput.Tests/P11.StructuredOutput.Tests.csproj" />
   </Folder>
 </Solution>
