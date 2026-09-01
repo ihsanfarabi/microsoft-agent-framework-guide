@@ -205,4 +205,4 @@ if [ -f "$deleted_file" ] && grep -q "$TICKET_ID" "$deleted_file"; then
 else
     say "note: no approval round was needed (stream carried text only) — raw frames in $TMP"
 fi
-say "raw SSE transcripts: $TMP/turn*.sse"
+say "raw SSE transcripts at $TMP/turn*.sse (removed on exit — copy first if you need them)."

@@ -239,8 +239,10 @@ static async Task<AIAgent> DiscoverAsync(string name, Uri host, string a2aPath)
     // filter matches that shape (and a bare HttpRequestException, should the
     // resolver ever surface one directly). A live-but-sick service that serves
     // a malformed/unparseable card throws A2AException("Failed to parse
-    // JSON: …") with an InnerException that is a JsonException, NOT an
-    // HttpRequestException — that propagates, as does OperationCanceledException
+    // JSON: …") with a NULL InnerException — the resolver uses the single-arg
+    // ctor, interpolating the JsonException's message into the wrapper text
+    // (decompile-verified). Null inner is not an HttpRequestException, so the
+    // filter still doesn't match — that propagates, as does OperationCanceledException
     // (never caught here): a sick discovery endpoint must not be silently
     // absorbed into a fallback that papers over it.
     catch (Exception ex) when (ex is HttpRequestException

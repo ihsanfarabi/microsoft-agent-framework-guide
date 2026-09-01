@@ -61,6 +61,14 @@ app.MapPost("/conversations/{id}/messages",
         AIAgent agent, PendingApprovals approvals, ConversationSessions sessions,
         CancellationToken ct) =>
     {
+        // Minimal validation (review fix): a missing body is already rejected
+        // with 400 by model binding, but a present-yet-blank text would
+        // otherwise reach the model — reject it before any session or run.
+        if (string.IsNullOrWhiteSpace(body.Text))
+        {
+            return Results.BadRequest(new { error = "empty_text", detail = "body.text is required" });
+        }
+
         var session = await sessions.GetOrCreateAsync(id, agent);
 
         http.Response.ContentType = "text/event-stream";
@@ -244,9 +252,9 @@ static async Task WriteSseErrorAsync(HttpResponse response, object payload,
     await response.Body.FlushAsync(ct);
 }
 
-/// <summary>Request body of the message endpoint. A missing/empty text is
-/// rejected by the minimal-API validation below rather than reaching the
-/// model.</summary>
+/// <summary>Request body of the message endpoint. A missing body is rejected
+/// by model binding; a present-but-blank <see cref="Text"/> is rejected with
+/// 400 by the handler's check — neither reaches the model.</summary>
 public sealed record MessageRequest(string Text);
 
 /// <summary>Request body of the approval endpoint: which parked request to

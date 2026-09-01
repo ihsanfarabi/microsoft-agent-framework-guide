@@ -82,4 +82,9 @@ docs say vs what actually happens. Highlights:
 - Agent nodes are `ChatProtocol` executors: an agent node's edge payload is
   `List<ChatMessage>` + `TurnToken`, never `AgentResponse` — a condition typed
   on the plan's snippet can never fire, silently (P15)
+- Generic `RunAsync<T>` always injects its own `ForJsonSchema<T>` and silently
+  discards a per-call ResponseFormat — a caller-chosen schema needs the
+  non-generic run + manual deserialize (P11)
+- The MCP C# SDK snake_cases tool names on the wire: the C# method surfaces
+  as `search_knowledge`, matching the SDK's default, not the method name (P12)
 - Full index: `docs/projects/*/NOTES.md`

@@ -118,12 +118,15 @@ hop, where the streaming event loop can surface it. The transcript says so:
   almost broke the fallback: decompiled `A2ACardResolver.GetAgentCardAsync`
   (a2a 1.0.0-preview2) surfaces connection failures as
   `A2AException("HTTP request failed", HttpRequestException)` and card-parse
-  failures as `A2AException("Failed to parse JSON: …", JsonException)`. A
+  failures as `A2AException("Failed to parse JSON: …")` with a **null**
+  InnerException — the resolver uses the single-arg ctor, interpolating the
+  JsonException's message into the wrapper text (decompile-verified; no
+  inner is attached). A
   catch written for a bare `HttpRequestException` (the obvious shape) matches
   *nothing* — the fallback would never fire. The filter is
   `ex is HttpRequestException || ex is A2AException { InnerException:
   HttpRequestException }` — transport failures only. A live-but-sick service
-  serving a malformed card (JsonException inner) and
+  serving a malformed card (null inner — not an HttpRequestException) and
   `OperationCanceledException` propagate untouched: the fallback absorbs
   "service is down", never "service is lying".
 - The fallback is not a swallow — it *relocates* the failure from "startup,
