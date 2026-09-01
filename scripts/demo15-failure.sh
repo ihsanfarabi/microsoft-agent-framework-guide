@@ -109,8 +109,12 @@ grep -q "\[workflow error\]" "$TMP/failure.log" \
     || fail "no [workflow error] line — the failure did not surface as a WorkflowErrorEvent in the streaming event loop"
 grep -q "\[FAILED\]" "$TMP/failure.log" \
     || fail "no [FAILED] diagnostics — the orchestrator did not report the failed scenario"
-grep -q "5199" "$TMP/failure.log" \
-    || fail "neither the exception nor the [failed hop] annotation names the A2A endpoint on port 5199 — the operator cannot tell WHICH hop died"
+# Pinned to the ERROR path (review fix): the [discovery failed] line also
+# mentions :5199, so a whole-log grep would be satisfied without the failure
+# ever surfacing. Only the [failed hop] annotation or a [FAILED] diagnostic
+# line naming 5199 proves the failure path itself carries the endpoint.
+grep -Eq "^\[(failed hop|FAILED)\].*5199" "$TMP/failure.log" \
+    || fail "neither the [failed hop] annotation nor a [FAILED] line names the A2A endpoint on port 5199 — the operator cannot tell WHICH hop died"
 say "OK: hardware run failed visibly — WorkflowErrorEvent + exception path naming the :5199 A2A endpoint"
 
 # --- 4. Run 2: software scenario, inventory still down --------------------------

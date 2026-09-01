@@ -232,9 +232,21 @@ static async Task<AIAgent> DiscoverAsync(string name, Uri host, string a2aPath)
         Console.WriteLine($"[discovered] {agent.Name} ({host.Authority}) via agent card");
         return agent;
     }
-    catch (Exception ex)
+    // Narrow catch (review fix): only a TRANSPORT failure may fall back to the
+    // hand-built card. The A2A SDK's resolver wraps connection errors as
+    // A2AException("HTTP request failed", HttpRequestException) — decompiled
+    // from A2ACardResolver.GetAgentCardAsync in a2a 1.0.0-preview2 — so the
+    // filter matches that shape (and a bare HttpRequestException, should the
+    // resolver ever surface one directly). A live-but-sick service that serves
+    // a malformed/unparseable card throws A2AException("Failed to parse
+    // JSON: …") with an InnerException that is a JsonException, NOT an
+    // HttpRequestException — that propagates, as does OperationCanceledException
+    // (never caught here): a sick discovery endpoint must not be silently
+    // absorbed into a fallback that papers over it.
+    catch (Exception ex) when (ex is HttpRequestException
+                               || (ex is A2AException a2a && a2a.InnerException is HttpRequestException))
     {
-        Console.WriteLine($"[discovery failed] {name} at {host}: {ex.Message}");
+        Console.WriteLine($"[discovery failed] {name} at {host}: {ex}");
         Console.WriteLine($"[discovery fallback] binding configured endpoint {host.GetLeftPart(UriPartial.Authority)}{a2aPath} anyway — the failure will surface at the hop, inside the workflow");
         var card = new AgentCard
         {
