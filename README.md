@@ -1,10 +1,18 @@
 # MAF Demo — HelpDeskHQ (C# Learning Curriculum)
 
+[![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
+
 10 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
+- **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
+- Per-project spec + plan + field notes: `docs/projects/NN-name/`
+
+All 10 implemented and verified: 57 unit tests green, the capstone compose
+stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
+and OTLP traces into the Aspire dashboard.
+
 Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
-Specs: `docs/projects/NN-name/SPEC.md` · Plans: `docs/projects/NN-name/PLAN.md`.
 
 ## Stack
 
@@ -43,3 +51,18 @@ dotnet --version                  # .NET 10
 2. Execute PLAN.md task by task (checkboxes)
 3. Each task: code, verify, commit (`rtk git ...`)
 4. API names come from cited doc pages in each task — docs win over plan code
+
+## Field notes worth reading
+
+Each project ends with `NOTES.md` recording what the MAF 1.19.0 prerelease
+docs say vs what actually happens. Highlights:
+
+- `ChatClientPromptAgentFactory` ships in `Microsoft.Agents.AI`, not
+  `.Declarative` as docs imply (P10)
+- Hardcoded `UseUrls()` silently overrides `ASPNETCORE_URLS` — container bound
+  loopback and the published port answered nothing (P10)
+- Two folders differing only in case merge on macOS and break the Docker
+  build — agent YAML lives in `Definitions/` (P10)
+- Durable-workflow payload typing between executors is the roughest doc-vs-
+  reality gap in the prerelease (P09)
+- Full index: `docs/projects/*/NOTES.md`

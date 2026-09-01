@@ -31,16 +31,16 @@ flowchart LR
 
 | # | Project | MAF feature | Highlights |
 |---|---------|-------------|------------|
-| 01 | HelloAgent | `AIAgent` + ChatClient | FAQ bot, OTLP telemetry, one-shot + REPL |
-| 02 | FunctionTools | `[Description]` tool calling | Agent calls local C# functions |
-| 03 | StructuredOutput | output schemas | Typed JSON responses |
-| 04 | HandbookRag | RAG grounding | Chunk + embed handbook, context-provider injection |
-| 05 | MultiAgent | agent-as-tool / handoffs | Multiple specialist agents composed |
-| 06 | RemoteAgentsA2A | A2A client | Consume a remote agent as a tool |
-| 07 | ResolutionWorkflow | Workflows | Executors, edges, conditional routing, shared state |
-| 08 | AgentSessions | Session persistence | Resume conversations across restarts, checkpoints |
-| 09 | DurableHost | Durable workflows + A2A server | Kill-and-resume, DTS emulator, hosted A2A endpoint |
-| 10 | HelpDeskCapstone | Everything together | OpenAI-compatible chat + A2A server + declarative YAML agents + RAG + evals + CI + compose |
+| 01 | `P01.HelloAgent` | `AIAgent` + `IChatClient` on Ollama | FAQ bot, OTLP telemetry, one-shot + REPL |
+| 02 | `P02.TicketTools` | `[Description]` tool calling, MCP | Agent calls local C# ticket-store functions |
+| 03 | `P03.SessionChat` | threads / sessions | Conversation survives process restart |
+| 04 | `P04.HandbookRag` | RAG grounding | Chunk + embed handbook, context-provider injection |
+| 05 | `P05.GuardrailMiddleware` | agent middleware | PII redaction, tool approval, OTel spans |
+| 06 | `P06.TriageComposition` | agents-as-tools, handoffs | Triage router composes specialist agents |
+| 07 | `P07.ResolutionWorkflow` | graph workflows | Executors, conditional edges, HITL, checkpoints |
+| 08 | `P08.HarnessAgent` | agent harness | Todos, file memory, approvals — overnight batch agent |
+| 09 | `P09.DurableHost` | durable workflows + A2A | Kill-and-resume on the DTS emulator, hosted A2A endpoint, client consuming it |
+| 10 | `P10.HelpDeskCapstone` | everything together | OpenAI-compatible chat + A2A server + declarative YAML agents + RAG + evals + CI + compose |
 
 ## Run
 
@@ -74,6 +74,7 @@ scheduler state. Full walkthrough in `docs/projects/09-a2a-durable/NOTES.md`.
 - `docs/corpus` — the MafCorp handbook markdown the RAG projects index.
 - `docs/projects/<n>-*/PLAN.md` — per-project learning plan, `NOTES.md` —
   findings and doc-vs-reality divergences.
-- `agents/` (inside P10) — declarative YAML agent definitions.
+- `Definitions/` (inside P10) — declarative YAML agent definitions (`Agents/`
+  would case-insensitively collide with the C# source folder on macOS).
 - `.github/workflows/ci.yml` — build + unit tests on push; eval suite gated to
   manual dispatch (needs live Ollama).
