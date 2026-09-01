@@ -33,9 +33,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IChatClient>(_ => OllamaChat.Create());
 builder.Services.AddSingleton(ticketStore);
 builder.Services.AddSingleton<PendingApprovals>();
-// conversationId -> live session. In-memory (Task 1 scope): a restart drops
-// sessions, and with them the ability to resume a paused conversation.
-builder.Services.AddSingleton<ConversationSessions>();
+// conversationId -> live session, checkpointed to work/sessions/{id}.json
+// after every stream end and rehydrated on demand (P08's per-run checkpoint
+// pattern). A restart therefore keeps the conversation HISTORY; what it
+// drops is PendingApprovals — the parked approvals are in-memory only, so a
+// paused turn dies with the process (the /approvals error frame documents
+// that recovery: ask again).
+builder.Services.AddSingleton(_ =>
+    new ConversationSessions(Path.Combine(workRoot, "sessions")));
 builder.Services.AddSingleton<AIAgent>(sp =>
     TicketAgent.Build(
         sp.GetRequiredService<IChatClient>(),
@@ -66,6 +71,13 @@ app.MapPost("/conversations/{id}/messages",
                     cancellationToken: ct),
                 id, session, approvals, ct),
             ct);
+        // P08's checkpoint discipline: the moment the stream ends, the
+        // session — history and any parked approval state — is serialized to
+        // disk (atomic temp-file move), so a later message (or a process
+        // restart) continues the conversation instead of starting over.
+        // Failures are swallowed with a console line (P08's fail-soft rule):
+        // a lost checkpoint must never crash the response after its work.
+        await sessions.CheckpointAsync(id, session, agent, ct);
         return Results.Empty;
     });
 
@@ -80,20 +92,34 @@ app.MapPost("/conversations/{id}/messages",
 // ToolApprovalRequestContent the run pauses again: the new request is parked
 // and a fresh `event: approval` frame ends this response. Loop-safe by
 // construction — the loop is the client posting /approvals again, never
-// server-side recursion.
+// server-side recursion. A burst turn (several parked requests) is answered
+// by posting once per requestId, in the order they surfaced.
 app.MapPost("/approvals/{conversationId}",
         async (string conversationId, ApprovalVote vote, HttpContext http,
-            AIAgent agent, PendingApprovals approvals, CancellationToken ct) =>
+            AIAgent agent, PendingApprovals approvals, ConversationSessions sessions,
+            CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(vote.RequestId))
                 return Results.BadRequest(new { error = "requestId is required" });
 
             if (!approvals.TryTake(vote.RequestId, out var pending))
-                return Results.NotFound(new
+            {
+                // Restart contract (Task 3): pending approvals are in-memory
+                // while the session checkpoints on disk — so after a restart
+                // the session history survives but the parked turn died with
+                // the process. This is surfaced as an SSE error frame (never
+                // a 500), telling the client the documented recovery: ask
+                // again — re-send the message and approve the fresh request.
+                await WriteSseErrorAsync(http.Response, new
                 {
-                    error = "unknown requestId: already answered, or the process restarted " +
-                            "(pending approvals are in-memory and do not survive a restart)",
-                });
+                    error = "unknown-request-id",
+                    detail = $"no pending approval '{vote.RequestId}': already answered, or the " +
+                             "process restarted (pending approvals are in-memory and do not survive a restart)",
+                    recovery = "the parked turn died with the process — ask again: re-send the message " +
+                               "to /conversations/{id}/messages and approve the fresh request",
+                }, ct);
+                return Results.Empty;
+            }
 
             if (!string.Equals(pending.ConversationId, conversationId, StringComparison.Ordinal))
             {
@@ -124,11 +150,48 @@ app.MapPost("/approvals/{conversationId}",
 
             http.Response.ContentType = "text/event-stream";
             http.Response.Headers.CacheControl = "no-cache";
-            await StreamSseFramesAsync(http.Response,
-                SseWriter.EnumerateFrames(
-                    agent.RunStreamingAsync(resumeMessage, pending.Session, cancellationToken: ct),
-                    conversationId, pending.Session, approvals, ct),
-                ct);
+            try
+            {
+                await StreamSseFramesAsync(http.Response,
+                    SseWriter.EnumerateFrames(
+                        agent.RunStreamingAsync(resumeMessage, pending.Session, cancellationToken: ct),
+                        conversationId, pending.Session, approvals, ct),
+                    ct);
+                // Stream ended (deltas, another parked approval, or the
+                // handled approval-required error frame) — checkpoint the
+                // session, same fail-soft rule as /messages. A checkpoint is
+                // deliberately NOT taken when the run THREW: the disk keeps
+                // the last known-good turn, and the in-memory session is what
+                // a re-park retry continues from.
+                await sessions.CheckpointAsync(conversationId, pending.Session, agent, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // Client disconnect or shutdown mid-resume: re-park so the
+                // decision is not orphaned — the T2-review minor (TryTake was
+                // not re-parked when the resume threw). Hazard (P08's NOTES
+                // resume note): the call may or may not have EXECUTED before
+                // the cancellation — a re-answer resumes the session from its
+                // current state, and if the call already ran, the harness
+                // finds no matching pending call and surfaces an error rather
+                // than double-executing.
+                approvals.Add(pending.ConversationId, pending.Request, pending.Session);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Same re-park for a failed resume: the approval returns to
+                // the store so the operator can answer it again, and the
+                // failure streams out as an error frame instead of a 500.
+                approvals.Add(pending.ConversationId, pending.Request, pending.Session);
+                await WriteSseErrorAsync(http.Response, new
+                {
+                    error = "resume-failed",
+                    detail = ex.Message,
+                    recovery = "the approval was re-parked — POST /approvals again, or re-send the message",
+                }, ct);
+            }
+
             return Results.Empty;
         });
 
@@ -156,12 +219,28 @@ static async Task StreamSseFramesAsync(HttpResponse response,
     {
         var payload = JsonSerializer.Serialize(new
         {
-            error = "approval-required: this conversation has an unanswered tool approval — resume it with the requestId from the approval event",
+            error = "approval-required: this conversation has an unanswered tool approval — resume it " +
+                    "with the requestId from the approval event (if the process restarted, that requestId " +
+                    "is gone: start a new conversation)",
             detail = ex.Message,
         });
         await response.Body.WriteAsync(Encoding.UTF8.GetBytes($"event: error\ndata: {payload}\n\n"), ct);
     }
 
+    await response.Body.FlushAsync(ct);
+}
+
+/// <summary>Writes one <c>event: error</c> SSE frame — the shape every
+/// terminal-but-not-exceptional outcome takes (unanswered approval, unknown
+/// requestId after a restart, failed resume). Never a 500: the client gets a
+/// machine-readable error name plus a human-readable recovery.</summary>
+static async Task WriteSseErrorAsync(HttpResponse response, object payload,
+    CancellationToken ct)
+{
+    response.ContentType = "text/event-stream";
+    response.Headers.CacheControl = "no-cache";
+    await response.Body.WriteAsync(
+        Encoding.UTF8.GetBytes($"event: error\ndata: {JsonSerializer.Serialize(payload)}\n\n"), ct);
     await response.Body.FlushAsync(ct);
 }
 
@@ -179,18 +258,116 @@ public sealed record MessageRequest(string Text);
 public sealed record ApprovalVote(
     string RequestId, bool Approved = false, string? Reason = null, bool ApproveAlways = false);
 
-/// <summary>Per-conversation live sessions: first message creates the
-/// <see cref="AgentSession"/>, later messages continue it — the same session
-/// object is what the approval flow parks and resumes.</summary>
-public sealed class ConversationSessions
+/// <summary>Per-conversation live sessions with disk checkpoints (Task 3,
+/// P08's session-state pattern): the first message of a conversation
+/// rehydrates <c>sessions/{id}.json</c> if one exists (deserialize, then
+/// verify the round-trip by re-serializing before trusting it), later
+/// messages continue the in-memory session, and <see cref="CheckpointAsync"/>
+/// — called after every stream end by both endpoints — serializes the
+/// session back (atomic temp-file move, so a kill during the write cannot
+/// leave a torn file). Checkpoint failures other than cancellation are
+/// logged and swallowed (P08's rule): the next successful checkpoint
+/// supersedes the stale file, and the response must not crash after its
+/// work is done.</summary>
+public sealed class ConversationSessions(string directory)
 {
     private readonly ConcurrentDictionary<string, AgentSession> _sessions = new();
+
+    /// <summary>The deserialized sessions' source documents, held alive for
+    /// the process lifetime — P08's lesson: deserialized session state may
+    /// hold <see cref="System.Text.Json.JsonElement"/>s backed by the parsed
+    /// document, so it must outlive the <see cref="AgentSession"/> built from
+    /// it. A server holds sessions indefinitely, so the documents live with
+    /// them.</summary>
+    private readonly ConcurrentDictionary<string, System.Text.Json.JsonDocument> _sourceDocuments = new();
 
     public async Task<AgentSession> GetOrCreateAsync(string conversationId, AIAgent agent)
     {
         if (_sessions.TryGetValue(conversationId, out var session)) return session;
-        var created = await agent.CreateSessionAsync();
+        var restored = await TryLoadAsync(conversationId, agent);
+        var created = restored ?? await agent.CreateSessionAsync();
         return _sessions.GetOrAdd(conversationId, created);
+    }
+
+    /// <summary>Serializes the session to
+    /// <c>sessions/{conversationId}.json</c> — P08's <c>CheckpointAsync</c>
+    /// verbatim apart from the per-conversation path.</summary>
+    public async Task CheckpointAsync(string conversationId, AgentSession session, AIAgent agent,
+        CancellationToken ct = default)
+    {
+        var path = PathFor(conversationId);
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
+            var tmp = path + ".tmp";
+            await File.WriteAllTextAsync(tmp, serialized.GetRawText(), ct);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[checkpoint] FAILED to save session state for '{conversationId}': {ex.Message}");
+        }
+    }
+
+    /// <summary>Loads a previously checkpointed session, or null when there
+    /// is no file (fresh conversation) or the file is unusable — a corrupt
+    /// file is quarantined (moved aside, never overwritten by the next save)
+    /// and the conversation starts fresh. Unlike P08's CLI — which bricks
+    /// startup rather than risk redoing finished work — failing soft to a
+    /// fresh session is safe here: every destructive call is approval-gated
+    /// again, so a lost history cannot cause a lost decision, only a lost
+    /// memory.</summary>
+    private async Task<AgentSession?> TryLoadAsync(string conversationId, AIAgent agent)
+    {
+        var path = PathFor(conversationId);
+        if (!File.Exists(path)) return null;
+
+        try
+        {
+            var saved = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path));
+            var session = await agent.DeserializeSessionAsync(saved.RootElement);
+            // Round-trip verification: the restored session must survive its
+            // own save format — a session that cannot be serialized back
+            // would checkpoint garbage over the good file on the next turn.
+            _ = System.Text.Json.JsonDocument.Parse(
+                (await agent.SerializeSessionAsync(session)).GetRawText());
+            _sourceDocuments[conversationId] = saved;
+            return session;
+        }
+        catch (Exception ex)
+        {
+            var quarantine = $"{path}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
+            try
+            {
+                File.Move(path, quarantine, overwrite: true);
+            }
+            catch (IOException moveError)
+            {
+                Console.Error.WriteLine($"[resume] could not quarantine {path}: {moveError.Message}");
+            }
+
+            Console.Error.WriteLine(
+                $"[resume] session state for '{conversationId}' is unreadable " +
+                $"({ex.GetType().Name}: {ex.Message}); moved it to {quarantine}, starting fresh.");
+            return null;
+        }
+    }
+
+    private string PathFor(string conversationId)
+    {
+        // The conversation id is a free-form route segment — strip anything
+        // that is not a legal filename character (and with it any path
+        // traversal) before it reaches the sessions directory.
+        var safe = string.Join("_",
+            conversationId.Split(System.IO.Path.GetInvalidFileNameChars(),
+                StringSplitOptions.RemoveEmptyEntries));
+        return Path.Combine(directory, $"{safe}.json");
     }
 }
 
