@@ -2,13 +2,13 @@
 
 [![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
 
-10 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
+11 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
 - **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
 - Per-project spec + plan + field notes: `docs/projects/NN-name/`
 
-All 10 implemented and verified: 57 unit tests green, the capstone compose
+All 11 implemented and verified: 62 unit tests green, the capstone compose
 stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
 and OTLP traces into the Aspire dashboard.
 
@@ -36,6 +36,7 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 8 | harness-agent | agent harness: todos, file memory, approvals | Overnight batch agent |
 | 9 | a2a-durable | A2A self-host, durable extension | Remote inventory agent |
 | 10 | helpdesk-capstone | self-host, declarative YAML, evals, CI | Full product |
+| 11 | structured-output | typed `RunAsync<T>`, JSON response formats | Typed ticket triage |
 
 ## Setup (once)
 

@@ -2,7 +2,7 @@
 
 # MafDemo — Microsoft Agent Framework curriculum
 
-Ten projects that walk the Microsoft Agent Framework (MAF) from a one-file
+Eleven projects that walk the Microsoft Agent Framework (MAF) from a one-file
 chatbot to a durable multi-agent workflow — all on a local Ollama model, all
 runnable end to end. Built against the 1.19.0 prerelease line; API
 divergences from the docs are recorded per project in `docs/projects/*/NOTES.md`.
@@ -41,6 +41,7 @@ flowchart LR
 | 08 | `P08.HarnessAgent` | agent harness | Todos, file memory, approvals — overnight batch agent |
 | 09 | `P09.DurableHost` | durable workflows + A2A | Kill-and-resume on the DTS emulator, hosted A2A endpoint, client consuming it |
 | 10 | `P10.HelpDeskCapstone` | everything together | OpenAI-compatible chat + A2A server + declarative YAML agents + RAG + evals + CI + compose |
+| 11 | `P11.StructuredOutput` | typed `RunAsync<T>`, JSON response formats | Typed triage via `RunAsync<T>`, per-call vs raw format paths, schema-compliance probe + one-retry fallback |
 
 ## Run
 
