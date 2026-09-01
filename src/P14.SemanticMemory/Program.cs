@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.VectorData.InMemory;
 using MafDemo.AgentCommon;
 using MafDemo.Core.Memory;
@@ -83,23 +84,34 @@ var agent = new ChatClientAgent(OllamaChat.Create(), new ChatClientAgentOptions
 });
 
 // Modes:
-//   (no args)  scripted two-session demo in one process: tell in session A,
-//              then ask the recall question in a brand-new session B.
-//   tell       run only the "tell" phase, then exit (second process run).
-//   recall     run only the "recall" phase (fresh process, empty store).
-switch (args.FirstOrDefault())
+//   (no args)      scripted two-session demo in one process: tell in session A,
+//                  then ask the recall question in a brand-new session B.
+//   tell [text]    run only the "tell" phase, then exit (second process run).
+//                  With no text, states the demo preference.
+//   recall [q]     run only the "recall" phase (fresh process, empty in-memory
+//                  state — only the facts file carries memory across).
+//   repl           interactive chat; `mem list` / `mem clear` inspect and reset
+//                  the durable fact store, everything else goes to the agent.
+const string DefaultTell = "Remember: I prefer email over phone.";
+const string DefaultRecall = "How should we contact you about my ticket?";
+var mode = args.FirstOrDefault();
+var text = string.Join(' ', args.Skip(1)).Trim();
+switch (mode)
 {
     case null:
         await ScriptedDemoAsync(agent, factStore, factsPath);
         break;
     case "tell":
-        await TellAsync(agent, factStore, factsPath);
+        await TellAsync(agent, factStore, factsPath, text.Length > 0 ? text : DefaultTell);
         break;
     case "recall":
-        await RecallAsync(agent);
+        await RecallAsync(agent, text.Length > 0 ? text : DefaultRecall);
+        break;
+    case "repl":
+        await ReplAsync(agent, factStore, factsPath);
         break;
     default:
-        Console.WriteLine("usage: dotnet run [-- tell|recall]  (no args = scripted demo)");
+        Console.WriteLine("usage: dotnet run [-- tell [text] | recall [question] | repl]  (no args = scripted demo)");
         return;
 }
 
@@ -124,12 +136,12 @@ static async Task ScriptedDemoAsync(ChatClientAgent agent, FactMemoryStore factS
     Console.WriteLine($"bot> {recall.Text}");
 }
 
-static async Task TellAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath)
+static async Task TellAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath, string message)
 {
     AgentSession session = await agent.CreateSessionAsync();
     Console.WriteLine("== session A (new) ==");
-    Console.WriteLine("user> Remember: I prefer email over phone.");
-    var tell = await agent.RunAsync("Remember: I prefer email over phone.", session);
+    Console.WriteLine($"user> {message}");
+    var tell = await agent.RunAsync(message, session);
     Console.WriteLine($"bot> {tell.Text}");
     // Unlike the in-process chat-history store, the fact store persists:
     // `dotnet run -- recall` in a fresh process will still find the fact.
@@ -137,11 +149,71 @@ static async Task TellAsync(ChatClientAgent agent, FactMemoryStore factStore, st
     Console.WriteLine($"(facts saved to {factsPath}; chat-history store contents are gone)");
 }
 
-static async Task RecallAsync(ChatClientAgent agent)
+static async Task RecallAsync(ChatClientAgent agent, string message)
 {
     AgentSession session = await agent.CreateSessionAsync();
     Console.WriteLine("== session B (new) ==");
-    Console.WriteLine("user> How should we contact you about my ticket?");
-    var recall = await agent.RunAsync("How should we contact you about my ticket?", session);
+    Console.WriteLine($"user> {message}");
+    var recall = await agent.RunAsync(message, session);
     Console.WriteLine($"bot> {recall.Text}");
+}
+
+// Interactive chat over one session, plus two window into the durable fact
+// store: `mem list` enumerates what the extractor remembered so far (direct
+// collection read — no model, no embeddings), `mem clear` resets it (and
+// rewrites the facts file so the clear survives a restart). Every turn saves
+// the fact store, so a REPL conversation carries into a later process.
+static async Task ReplAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath)
+{
+    const string userId = "demo-user"; // same pinned scope as the providers
+    AgentSession session = await agent.CreateSessionAsync();
+    Console.WriteLine("== P14 repl — chat naturally; commands: mem list, mem clear, quit ==");
+    while (true)
+    {
+        Console.Write("user> ");
+        var line = Console.ReadLine();
+        if (line is null)
+        {
+            break; // stdin closed (piped/EOF input) — exit cleanly
+        }
+
+        line = line.Trim();
+        if (line.Length == 0)
+        {
+            continue;
+        }
+
+        if (line is "quit" or "exit")
+        {
+            break;
+        }
+
+        if (line == "mem list")
+        {
+            var facts = await factStore.ListAsync(userId);
+            if (facts.Count == 0)
+            {
+                Console.WriteLine("(no facts stored)");
+            }
+
+            foreach (var fact in facts)
+            {
+                Console.WriteLine($"  [{fact.CreatedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}] {fact.Text}");
+            }
+
+            continue;
+        }
+
+        if (line == "mem clear")
+        {
+            var removed = await factStore.ClearAsync(userId);
+            await factStore.SaveAsync(factsPath);
+            Console.WriteLine($"(cleared {removed} fact(s); {factsPath} updated)");
+            continue;
+        }
+
+        var reply = await agent.RunAsync(line, session);
+        Console.WriteLine($"bot> {reply.Text}");
+        await factStore.SaveAsync(factsPath);
+    }
 }

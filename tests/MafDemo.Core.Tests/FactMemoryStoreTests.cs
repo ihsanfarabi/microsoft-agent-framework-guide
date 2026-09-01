@@ -113,6 +113,36 @@ public class FactMemoryStoreTests
         Assert.Equal(EmailFact, u1.Single().Text);
     }
 
+    [Fact]
+    public async Task ListAsync_returns_all_of_the_users_facts_oldest_first()
+    {
+        var store = new FactMemoryStore(CreateEmbedder());
+        var first = await store.AddAsync("u1", EmailFact);
+        await store.AddAsync("u2", ParisFact); // other user — must not appear
+        var third = await store.AddAsync("u1", ParisFact);
+
+        var listed = await store.ListAsync("u1");
+
+        Assert.Equal(2, listed.Count);
+        Assert.Equal(first.Id, listed[0].Id);
+        Assert.Equal(third.Id, listed[1].Id);
+    }
+
+    [Fact]
+    public async Task ClearAsync_removes_only_the_given_users_facts()
+    {
+        var store = new FactMemoryStore(CreateEmbedder());
+        await store.AddAsync("u1", EmailFact);
+        await store.AddAsync("u1", ParisFact);
+        await store.AddAsync("u2", EmailFact);
+
+        var removed = await store.ClearAsync("u1");
+
+        Assert.Equal(2, removed);
+        Assert.Empty(await store.ListAsync("u1"));
+        Assert.Single(await store.ListAsync("u2")); // other user's facts survive
+    }
+
     private static float[] OneHot(int index)
     {
         var v = new float[Dims];

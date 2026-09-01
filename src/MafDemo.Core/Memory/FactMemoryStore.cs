@@ -99,6 +99,47 @@ public sealed class FactMemoryStore
         return results;
     }
 
+    /// <summary>
+    /// Lists every fact of <paramref name="userId"/>, oldest first. Pure
+    /// collection enumeration — no model call, no embedding.
+    /// </summary>
+    public async Task<IReadOnlyList<MemoryFact>> ListAsync(string userId)
+    {
+        await _collection.EnsureCollectionExistsAsync();
+        var facts = new List<MemoryFact>();
+        await foreach (var fact in _collection.GetAsync(
+                           f => f.UserId == userId,
+                           top: MaxFactsPerUser,
+                           new FilteredRecordRetrievalOptions<MemoryFact> { IncludeVectors = false }))
+        {
+            facts.Add(fact);
+        }
+
+        return facts.OrderBy(f => f.CreatedAt).ToList();
+    }
+
+    /// <summary>
+    /// Deletes every fact of <paramref name="userId"/>. Returns how many were
+    /// removed. Persist with <see cref="SaveAsync"/> to make the clear survive
+    /// a process restart.
+    /// </summary>
+    public async Task<int> ClearAsync(string userId)
+    {
+        await _collection.EnsureCollectionExistsAsync();
+        var keys = new List<string>();
+        await foreach (var fact in _collection.GetAsync(f => f.UserId == userId, top: MaxFactsPerUser))
+        {
+            keys.Add(fact.Id);
+        }
+
+        foreach (var key in keys)
+        {
+            await _collection.DeleteAsync(key);
+        }
+
+        return keys.Count;
+    }
+
     /// <summary>Serializes the fact collection to <paramref name="path"/> as JSON.</summary>
     public async Task SaveAsync(string path)
     {
