@@ -75,47 +75,38 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
     var diagnosisNode = new AIAgentBinding(diagnosis, new AIAgentHostOptions { EmitAgentResponseEvents = true });
     var inventoryNode = new AIAgentBinding(inventory, new AIAgentHostOptions { EmitAgentResponseEvents = true });
     var triage = new TriageExecutor();
+    var hardwareGate = new HardwareGateExecutor();
     var report = new ReportExecutor();
-
-    // Set by the response-list branch of the inventory edge; the agent node's
-    // trailing TurnToken then rides the same edge to trigger the inventory
-    // turn. On the software path it stays false, so the TurnToken is dropped
-    // at the condition and the remote inventory agent is NEVER invoked — the
-    // skip is in the graph, not in the model.
-    bool hardwareDetected = false;
 
     Workflow workflow = new WorkflowBuilder(triage)
         .AddEdge(triage, diagnosisNode)
-        .AddEdge<object>(diagnosisNode, inventoryNode, msg =>
-        {
-            if (msg is List<ChatMessage> result && IsAgentResult(result) && ContainsHardware(result))
-            {
-                hardwareDetected = true;
-                Console.WriteLine("[route] DiagnosisAgent (:5200) -> InventoryAgent (:5199): diagnosis flags NEEDS-HARDWARE");
-            }
-            return hardwareDetected;
-        })
-        .AddEdge<List<ChatMessage>>(diagnosisNode, report, result =>
-        {
-            if (result is null || !IsAgentResult(result) || ContainsHardware(result))
-            {
-                return false;
-            }
-            Console.WriteLine("[route] DiagnosisAgent (:5200) -> Report (software-only: inventory hop SKIPPED)");
-            return true;
-        })
+        // Both conditional edges are pure content predicates (P07 style): no
+        // prints, no closure state. The hardware path goes through the
+        // HardwareGate node, which performs the TurnToken handshake the
+        // inventory node needs; the trailing TurnToken an agent node emits is
+        // dropped at these typed conditions (null-safe predicates), so on the
+        // software path the remote inventory agent is NEVER invoked.
+        .AddEdge<List<ChatMessage>>(diagnosisNode, hardwareGate, NeedsHardware)
+        .AddEdge<List<ChatMessage>>(diagnosisNode, report, SoftwareOnly)
+        .AddEdge(hardwareGate, inventoryNode)
         .AddEdge(inventoryNode, report)
         .WithOutputFrom(diagnosisNode, inventoryNode, report)
         .Build();
 
-    // `RunAsync(workflow, input)` from the plan snippet does not exist in
-    // 1.19.0 (only the streaming variants) — same event loop as P07.
+    // `InProcessExecution.RunAsync(workflow, input)` DOES exist in 1.19.0
+    // (returns ValueTask<Run>); we use the streaming variant for the
+    // P07-style event loop, which surfaces failures as WorkflowErrorEvent.
     await using StreamingRun handle = await InProcessExecution.RunStreamingAsync(workflow, ticket);
+    bool inventoryHit = false;
     await foreach (WorkflowEvent evt in handle.WatchStreamAsync())
     {
         switch (evt)
         {
             case WorkflowOutputEvent { Data: AgentResponse response } output:
+                if (output.ExecutorId.StartsWith("InventoryAgent", StringComparison.Ordinal))
+                {
+                    inventoryHit = true;
+                }
                 Console.WriteLine($"[hop output] {output.ExecutorId}: {response.Text}");
                 break;
             case WorkflowOutputEvent output:
@@ -129,14 +120,31 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
                 break;
         }
     }
+
+    // Route summary derived from what actually ran (no condition side
+    // effects): an InventoryAgent output event means the second remote hop
+    // fired; its absence means the conditional edge skipped it.
+    Console.WriteLine(inventoryHit
+        ? "[route summary] hops hit: Triage (local) -> DiagnosisAgent (:5200) -> InventoryAgent (:5199) -> Report (local)"
+        : "[route summary] hops hit: Triage (local) -> DiagnosisAgent (:5200) -> Report (local); InventoryAgent (:5199) SKIPPED by the conditional edge");
 }
 
 // The diagnosis node forwards what it received (reassigned to the user role)
 // ahead of its own response; only a list containing an assistant message is
 // the remote result (A2A Role.Agent maps to ChatRole.Assistant in the A2A
-// client package — verified in AIContentExtensions).
+// client package — verified in AIContentExtensions). The forwarded chatter is
+// user-role only, so it can never satisfy these predicates.
 static bool IsAgentResult(List<ChatMessage> messages) =>
     messages.Any(m => m.Role == ChatRole.Assistant);
 
+static bool NeedsHardware(List<ChatMessage>? result) =>
+    result is not null && IsAgentResult(result) && ContainsHardware(result);
+
+static bool SoftwareOnly(List<ChatMessage>? result) =>
+    result is not null && IsAgentResult(result) && !ContainsHardware(result);
+
+// Matched against assistant-authored messages ONLY: a ticket or forwarded
+// user content that merely mentions the token must not route the graph.
 static bool ContainsHardware(List<ChatMessage> messages) =>
-    messages.Any(m => m.Text?.Contains("NEEDS-HARDWARE", StringComparison.OrdinalIgnoreCase) == true);
+    messages.Any(m => m.Role == ChatRole.Assistant &&
+                      m.Text?.Contains("NEEDS-HARDWARE", StringComparison.OrdinalIgnoreCase) == true);
