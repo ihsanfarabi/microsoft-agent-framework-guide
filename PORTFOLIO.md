@@ -33,6 +33,8 @@ flowchart LR
 
 ## Projects
 
+### Foundations (P01–P05) — one agent, one conversation, one tool, grounded and guarded
+
 | # | Project | MAF feature | Highlights |
 |---|---------|-------------|------------|
 | 01 | `P01.HelloAgent` | `AIAgent` + `IChatClient` on Ollama | FAQ bot, OTLP telemetry, one-shot + REPL |
@@ -40,9 +42,19 @@ flowchart LR
 | 03 | `P03.SessionChat` | threads / sessions | Conversation survives process restart |
 | 04 | `P04.HandbookRag` | RAG grounding | Chunk + embed handbook, context-provider injection |
 | 05 | `P05.GuardrailMiddleware` | agent middleware | PII redaction, tool approval, OTel spans |
+
+### Composition (P06–P08) — many agents, graphs, and an overnight harness
+
+| # | Project | MAF feature | Highlights |
+|---|---------|-------------|------------|
 | 06 | `P06.TriageComposition` | agents-as-tools, handoffs | Triage router composes specialist agents |
 | 07 | `P07.ResolutionWorkflow` | graph workflows | Executors, conditional edges, HITL, checkpoints |
 | 08 | `P08.HarnessAgent` | agent harness | Todos, file memory, approvals — overnight batch agent |
+
+### Production (P09–P15) — durable hosts, remote agents, and the seams where prerelease docs meet reality
+
+| # | Project | MAF feature | Highlights |
+|---|---------|-------------|------------|
 | 09 | `P09.DurableHost` | durable workflows + A2A | Kill-and-resume on the DTS emulator, hosted A2A endpoint, client consuming it |
 | 10 | `P10.HelpDeskCapstone` | everything together | OpenAI-compatible chat + A2A server + declarative YAML agents + RAG + evals + CI + compose |
 | 11 | `P11.StructuredOutput` | typed `RunAsync<T>`, JSON response formats | Typed triage via `RunAsync<T>`, per-call vs raw format paths, schema-compliance probe + one-retry fallback |

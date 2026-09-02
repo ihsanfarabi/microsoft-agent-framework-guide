@@ -25,6 +25,8 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 
 ## Ladder
 
+**Foundations (1–5)** — one agent, one conversation, one tool, grounded and guarded.
+
 | # | Project | MAF concepts | HelpdeskHQ story |
 |---|---|---|---|
 | 1 | hello-agent | ChatClientAgent, streaming, OTel | FAQ responder |
@@ -32,14 +34,26 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 3 | session-chat | threads, sessions, persistence | Conversation survives restart |
 | 4 | handbook-rag | context providers, embeddings, grounding | IT handbook answers |
 | 5 | guardrail-middleware | middleware, PII redaction, tool approval, OTel | Safe operations |
+
+**Composition (6–8)** — many agents, graphs, and an overnight harness.
+
+| # | Project | MAF concepts | HelpdeskHQ story |
+|---|---|---|---|
 | 6 | triage-composition | agents-as-tools, handoff orchestration | Routes to specialists |
 | 7 | resolution-workflow | graph workflows, HITL, checkpoints | Resolution pipeline |
 | 8 | harness-agent | agent harness: todos, file memory, approvals | Overnight batch agent |
+
+**Production (9–15)** — durable hosts, remote agents, and the seams where prerelease docs meet reality.
+
+| # | Project | MAF concepts | HelpdeskHQ story |
+|---|---|---|---|
 | 9 | a2a-durable | A2A self-host, durable extension | Remote inventory agent |
 | 10 | helpdesk-capstone | self-host, declarative YAML, evals, CI | Full product |
 | 11 | structured-output | typed `RunAsync<T>`, JSON response formats | Typed ticket triage |
 | 12 | mcp-knowledge-server | custom MCP stdio server, MCP client | Handbook knowledge server for the ticket bot |
 | 13 | streaming-approval | `UseToolApproval`, SSE streaming, HITL | Delete needs an operator vote mid-stream |
+| 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD | Remembers your preference across process restarts |
+| 15 | distributed-workflow | graph workflows over remote A2A agents, conditional edges | One graph, two remote agents, dead hop fails visibly |
 | 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD vector store | Remembers your preferences across process restarts |
 | 15 | distributed-workflow | graph workflows across A2A, conditional edges, failure visibility | One graph, two remote agent hops — skip a dead one, visibly |
 
