@@ -95,17 +95,22 @@ public static class TypedTriage
         });
 
     /// <summary>
-    /// Removes a leading markdown code fence (``` / ```json) and its closing
-    /// fence, which <see cref="AgentResponse{T}.Result"/>'s deserializer cannot
-    /// read. Text without fences passes through unchanged.
+    /// Removes a markdown code fence (``` / ```json) and its closing fence
+    /// wherever they occur in the response, keeping only the body — which
+    /// <see cref="AgentResponse{T}.Result"/>'s deserializer can read. Cloud-routed
+    /// models often prepend a sentence ("Sure! Here is the classification:") before
+    /// the fence, so gating on "response starts with ```" leaves exactly those
+    /// cases broken. Text with no fence passes through unchanged.
     /// </summary>
     public static string NormalizeJsonText(string text)
     {
-        var trimmed = text.TrimStart();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        var trimmed = text.Trim();
+        int open = trimmed.IndexOf("```", StringComparison.Ordinal);
+        if (open < 0)
             return text;
 
-        int firstNewline = trimmed.IndexOf('\n');
+        // The fence may be "```json\n" — the body starts after the fence's line.
+        int firstNewline = trimmed.IndexOf('\n', open);
         if (firstNewline < 0)
             return text;
 
@@ -127,11 +132,11 @@ public static class TypedTriage
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             var response = await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
-            if (response.Text is { } text && text.TrimStart().StartsWith("```", StringComparison.Ordinal))
+            if (response.Text is { } text && text.Contains("```", StringComparison.Ordinal))
             {
                 foreach (var message in response.Messages)
                 {
-                    if (!message.Text.StartsWith("```", StringComparison.Ordinal))
+                    if (!message.Text.Contains("```", StringComparison.Ordinal))
                         continue;
                     message.Contents =
                     [

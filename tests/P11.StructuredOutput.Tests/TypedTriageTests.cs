@@ -24,6 +24,23 @@ public class TypedTriageTests
     }
 
     [Fact]
+    public void ProbeJson_strips_fence_even_when_prose_precedes_it()
+    {
+        var probe = TypedTriage.ProbeJson(
+            "Sure! Here is the classification:\n```json\n" +
+            """{"Category":"Hardware","Priority":"High","Summary":"dead battery"}""" +
+            "\n```");
+        Assert.True(probe.Ok);
+    }
+
+    [Fact]
+    public void NormalizeJsonText_plain_text_passes_through_unchanged()
+    {
+        const string plain = """{"Category":"Network","Priority":1,"Summary":"wifi down"}""";
+        Assert.Equal(plain, TypedTriage.NormalizeJsonText(plain));
+    }
+
+    [Fact]
     public async Task RunAsync_returns_typed_decision()
     {
         if (Environment.GetEnvironmentVariable("RUN_EVALS") != "1") return;
