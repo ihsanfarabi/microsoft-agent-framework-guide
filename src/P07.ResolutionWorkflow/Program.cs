@@ -18,7 +18,7 @@ using var telemetry = Telemetry.StartOtlp("P07.ResolutionWorkflow");
 // Build the handbook vector index once at startup — the P06 specialists the
 // diagnosis node wraps ground their fixes with it (REUSE, NOT PORT).
 var retriever = new HandbookRetriever(new OllamaEmbedder());
-var chunks = FindCorpusDirectory()
+var chunks = HandbookCorpus.Locate()
     .GetFiles("*.md")
     .OrderBy(f => f.Name, StringComparer.Ordinal)
     .SelectMany(f => HandbookChunker.Chunk(f.Name, File.ReadAllText(f.FullName)))
@@ -231,20 +231,5 @@ static async Task<Guid?> DriveEventsAsync(StreamingRun handle, CheckpointManager
 static Workflow BuildWorkflow(ITicketStore store, HandbookRetriever retriever) =>
     ResolutionWorkflowFacts.Build(store, retriever);
 
-// dotnet run executes from bin/Debug/net10.0, so docs/corpus is several
-// levels above the working directory — walk up from the binary location the
-// same way P04/P06 do.
-static DirectoryInfo FindCorpusDirectory()
-{
-    for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-    {
-        var probe = Path.Combine(dir.FullName, "docs", "corpus");
-        if (Directory.Exists(probe))
-            return new DirectoryInfo(probe);
-    }
-
-    throw new DirectoryNotFoundException(
-        $"could not find docs/corpus in any parent of {AppContext.BaseDirectory}");
-}
 // ---- Disk record for the resume path: which session/checkpoint to restore.
 internal sealed record CheckpointRecord(string SessionId, string CheckpointId);

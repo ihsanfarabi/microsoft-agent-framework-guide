@@ -12,9 +12,9 @@ public static partial class KnowledgeTools
 
 /// <summary>
 /// Lazily loads and chunks the handbook corpus once per process.
-/// The corpus directory comes from args[0] when supplied, otherwise it is
-/// located by walking up from the binary location to docs/corpus — dotnet run
-/// executes from bin/&lt;cfg&gt;/net10.0, the same walk-up P04/P07/P09/P10 use.
+/// The corpus directory comes from the first CLI arg when it is an existing
+/// directory, otherwise HandbookCorpus.Locate walks up from the binary
+/// location to docs/corpus.
 /// </summary>
 public static class ChunkCache
 {
@@ -25,28 +25,13 @@ public static class ChunkCache
 
     private static IReadOnlyList<(string Doc, string Text)> Load()
     {
-        var corpus = CorpusDirectory();
+        var args = Environment.GetCommandLineArgs();
+        var overridePath = args.Length > 1 && Directory.Exists(args[1]) ? args[1] : null;
+        var corpus = HandbookCorpus.Locate(overridePath);
         var chunks = new List<(string, string)>();
         foreach (var file in corpus.GetFiles("*.md").OrderBy(f => f.Name, StringComparer.Ordinal))
             foreach (var c in HandbookChunker.Chunk(file.Name, File.ReadAllText(file.FullName)))
                 chunks.Add((c.Doc, c.Text));
         return chunks;
-    }
-
-    private static DirectoryInfo CorpusDirectory()
-    {
-        var args = Environment.GetCommandLineArgs();
-        if (args.Length > 1 && Directory.Exists(args[1]))
-            return new DirectoryInfo(args[1]);
-
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var probe = Path.Combine(dir.FullName, "docs", "corpus");
-            if (Directory.Exists(probe))
-                return new DirectoryInfo(probe);
-        }
-
-        throw new DirectoryNotFoundException(
-            $"could not find docs/corpus in any parent of {AppContext.BaseDirectory}");
     }
 }

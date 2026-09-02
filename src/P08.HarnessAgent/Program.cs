@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using MafDemo.AgentCommon;
+using MafDemo.Core.Handbook;
 using MafDemo.Core.Stores;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -231,29 +232,15 @@ static AIContent PromptApproval(ToolApprovalRequestContent request)
     };
 }
 
-/// <summary>Copies the shared handbook corpus (docs/corpus, located by walking
-/// up from the binary — P07's corpus finder pattern) into the file-access
+/// <summary>Copies the shared handbook corpus (docs/corpus) into the file-access
 /// store's handbook/ folder, so the agent's file_access_ls/grep/read tools
 /// have real policy docs to consult during the batch.</summary>
 static void CopyHandbook(string workRoot)
 {
-    var corpus = FindCorpusDirectory();
+    var corpus = HandbookCorpus.Locate();
     var target = Path.Combine(workRoot, "handbook");
     Directory.CreateDirectory(target);
     foreach (var file in corpus.GetFiles("*.md"))
         File.Copy(file.FullName, Path.Combine(target, file.Name), overwrite: true);
     Console.WriteLine($"copied {corpus.GetFiles("*.md").Length} handbook docs to {target}");
-}
-
-static DirectoryInfo FindCorpusDirectory()
-{
-    for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-    {
-        var probe = Path.Combine(dir.FullName, "docs", "corpus");
-        if (Directory.Exists(probe))
-            return new DirectoryInfo(probe);
-    }
-
-    throw new DirectoryNotFoundException(
-        $"could not find docs/corpus in any parent of {AppContext.BaseDirectory}");
 }

@@ -17,7 +17,7 @@ using var telemetry = Telemetry.StartOtlp("P06.TriageComposition");
 // embed every chunk of every corpus doc, then only the query is embedded
 // per turn). The OllamaEmbedder is P04's — REUSE, NOT PORT.
 var retriever = new HandbookRetriever(new OllamaEmbedder());
-var chunks = FindCorpusDirectory()
+var chunks = HandbookCorpus.Locate()
     .GetFiles("*.md")
     .OrderBy(f => f.Name, StringComparer.Ordinal)
     .SelectMany(f => HandbookChunker.Chunk(f.Name, File.ReadAllText(f.FullName)))
@@ -126,20 +126,4 @@ else
         Console.WriteLine();
         Console.WriteLine($"held by: {holdingAgent}");
     }
-}
-
-// dotnet run executes from bin/Debug/net10.0, so docs/corpus is several
-// levels above the working directory. Walk up from the binary location the
-// same way P04 does.
-static DirectoryInfo FindCorpusDirectory()
-{
-    for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-    {
-        var probe = Path.Combine(dir.FullName, "docs", "corpus");
-        if (Directory.Exists(probe))
-            return new DirectoryInfo(probe);
-    }
-
-    throw new DirectoryNotFoundException(
-        $"could not find docs/corpus in any parent of {AppContext.BaseDirectory}");
 }

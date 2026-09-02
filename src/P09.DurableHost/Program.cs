@@ -22,7 +22,7 @@ using var telemetry = Telemetry.StartOtlp("P09.DurableHost");
 // Same corpus indexing + file-backed ticket store as P07 — durability of the
 // ticket states must survive the kill-and-resume restart too.
 var retriever = new HandbookRetriever(new OllamaEmbedder());
-var chunks = FindCorpusDirectory()
+var chunks = HandbookCorpus.Locate()
     .GetFiles("*.md")
     .OrderBy(f => f.Name, StringComparer.Ordinal)
     .SelectMany(f => HandbookChunker.Chunk(f.Name, File.ReadAllText(f.FullName)))
@@ -164,19 +164,6 @@ static async Task<int> DriveResumeAsync(IServiceProvider services, Workflow work
         culture: null)!;
 
     return await DriveEventsAsync(run, runInfoFile);
-}
-
-static DirectoryInfo FindCorpusDirectory()
-{
-    for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-    {
-        var probe = Path.Combine(dir.FullName, "docs", "corpus");
-        if (Directory.Exists(probe))
-            return new DirectoryInfo(probe);
-    }
-
-    throw new DirectoryNotFoundException(
-        $"could not find docs/corpus in any parent of {AppContext.BaseDirectory}");
 }
 
 internal sealed record RunRecord(string RunId);

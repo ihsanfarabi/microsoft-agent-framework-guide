@@ -3,6 +3,7 @@
   <!-- REUSE, NOT PORT: the P07 graph comes through ResolutionWorkflowFacts
        (verbatim extraction), handbook retrieval through P04/P06. -->
   <ItemGroup>
+    <ProjectReference Include="..\MafDemo.Core\MafDemo.Core.csproj" />
     <ProjectReference Include="..\P07.ResolutionWorkflow\P07.ResolutionWorkflow.csproj" />
   </ItemGroup>
 
