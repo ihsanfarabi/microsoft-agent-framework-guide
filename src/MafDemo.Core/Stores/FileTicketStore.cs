@@ -6,7 +6,7 @@ namespace MafDemo.Core.Stores;
 /// <summary>
 /// JSON-file-backed <see cref="ITicketStore"/> implementation.
 /// Loads existing tickets on construction (missing file = starts empty; corrupt
-/// file = moved to <c>.corrupt</c> and starts empty) and rewrites the whole file
+/// or duplicate-id file = moved to <c>.corrupt</c> and starts empty) and rewrites the whole file
 /// after each mutation. Single-threaded demo store — no locking.
 /// </summary>
 public class FileTicketStore(string path) : ITicketStore
@@ -22,12 +22,13 @@ public class FileTicketStore(string path) : ITicketStore
             var list = JsonSerializer.Deserialize<List<Ticket>>(File.ReadAllText(p)) ?? [];
             return list.ToDictionary(t => t.Id);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
-            // Corrupt file (e.g. a crash mid-write before atomic saves existed):
-            // preserve the bad data as <path>.corrupt so the user can inspect it,
-            // but start empty rather than throwing from the ctor and bricking
-            // every P04+ project that constructs this store.
+            // Corrupt or unusable file (a crash mid-write before atomic saves
+            // existed, or a duplicate ticket Id from two app instances sharing
+            // a work directory): preserve the bad data as <path>.corrupt so the
+            // user can inspect it, but start empty rather than throwing from
+            // the ctor and bricking every P04+ project that constructs this store.
             File.Move(p, p + ".corrupt", overwrite: true);
             return [];
         }

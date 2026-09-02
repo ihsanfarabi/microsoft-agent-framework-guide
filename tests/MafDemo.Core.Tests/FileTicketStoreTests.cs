@@ -47,6 +47,26 @@ public class FileTicketStoreTests
     }
 
     [Fact]
+    public async Task Duplicate_id_file_starts_empty_instead_of_throwing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        var id = Guid.NewGuid();
+        var dup = $$"""
+            [
+              {"Id":"{{id}}","Title":"a","Description":"d","Priority":0,"Status":0,"Notes":[]},
+              {"Id":"{{id}}","Title":"b","Description":"d","Priority":0,"Status":0,"Notes":[]}
+            ]
+            """;
+        File.WriteAllText(path, dup);
+
+        var store = new FileTicketStore(path);        // must not throw (ArgumentException today)
+        Assert.Empty(await store.ListAsync());
+        // The unusable file is preserved for inspection, same as the corrupt case.
+        Assert.True(File.Exists(path + ".corrupt"));
+        File.Delete(path + ".corrupt");
+    }
+
+    [Fact]
     public async Task Corrupt_file_starts_empty_instead_of_throwing()
     {
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
