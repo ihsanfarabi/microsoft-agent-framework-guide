@@ -69,6 +69,10 @@ app.MapPost("/conversations/{id}/messages",
             return Results.BadRequest(new { error = "empty_text", detail = "body.text is required" });
         }
 
+        // Per-conversation run gate: held for the whole run (session
+        // get-or-create through checkpoint) so two requests on one
+        // conversation cannot interleave their runs on the shared session.
+        await using var _ = await sessions.AcquireAsync(id);
         var session = await sessions.GetOrCreateAsync(id, agent);
 
         http.Response.ContentType = "text/event-stream";
@@ -156,6 +160,10 @@ app.MapPost("/approvals/{conversationId}",
             // the model narrates the outcome as the resumed stream.
             var resumeMessage = new ChatMessage(ChatRole.User, [approvalResponse]);
 
+            // Same per-conversation gate as /messages — taken only after the
+            // take + conversation check above, so a bad or foreign request
+            // bounces without holding the gate.
+            await using var _ = await sessions.AcquireAsync(conversationId);
             http.Response.ContentType = "text/event-stream";
             http.Response.Headers.CacheControl = "no-cache";
             try
@@ -276,10 +284,37 @@ public sealed record ApprovalVote(
 /// leave a torn file). Checkpoint failures other than cancellation are
 /// logged and swallowed (P08's rule): the next successful checkpoint
 /// supersedes the stale file, and the response must not crash after its
-/// work is done.</summary>
+/// work is done. Per-conversation runs serialize on <see cref="AcquireAsync"/>:
+/// both endpoints hold the gate for the whole run (session get-or-create
+/// through checkpoint), because two runs on the SAME conversation share one
+/// AgentSession and one checkpoint tmp file — interleaving them duplicates
+/// history and torn-writes the checkpoint. Cross-conversation runs
+/// parallelize.</summary>
 public sealed class ConversationSessions(string directory)
 {
     private readonly ConcurrentDictionary<string, AgentSession> _sessions = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
+
+    /// <summary>Per-conversation run gate: both endpoints hold it for the whole
+    /// run (session get-or-create through checkpoint), so two runs on the SAME
+    /// conversation serialize. Released via DisposeAsync on the returned
+    /// releaser — <c>await using</c> is the intended usage.</summary>
+    public async Task<SemaphoreReleaser> AcquireAsync(string conversationId)
+    {
+        var gate = _gates.GetOrAdd(conversationId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        return new SemaphoreReleaser(gate);
+    }
+
+    /// <summary>Releases one conversation gate on dispose.</summary>
+    public sealed record SemaphoreReleaser(SemaphoreSlim Gate) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            Gate.Release();
+            return ValueTask.CompletedTask;
+        }
+    }
 
     /// <summary>The deserialized sessions' source documents, held alive for
     /// the process lifetime — P08's lesson: deserialized session state may

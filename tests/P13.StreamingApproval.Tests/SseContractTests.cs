@@ -563,6 +563,75 @@ public class SseContractTests
         Assert.Contains("ask again", body);
     }
 
+    [Fact]
+    public async Task Conversation_gate_serializes_concurrent_runs()
+    {
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(b => b.ConfigureServices(services =>
+            {
+                services.AddSingleton<IChatClient>(new ScriptedClient(
+                    ScriptedClient.TextThenList, ScriptedClient.FinalText));
+            }));
+        var client = factory.CreateClient();
+
+        // Two double-submitted messages on ONE conversation: without a
+        // per-conversation gate both runs execute against the same AgentSession
+        // concurrently (interleaved history, racing checkpoints on one tmp file).
+        // With the gate, the second run waits for the first to finish and both
+        // complete — the checkpoint file left behind must be intact JSON.
+        var conversationId = $"gate-{Guid.NewGuid():N}";
+        var post = async () =>
+        {
+            using var content = new StringContent(
+                """{"text":"just list them"}""", Encoding.UTF8, "application/json");
+            using var response = await client.PostAsync($"/conversations/{conversationId}/messages", content);
+            return response.StatusCode;
+        };
+
+        var statuses = await Task.WhenAll(post(), post());
+
+        Assert.All(statuses, s => Assert.Equal(System.Net.HttpStatusCode.OK, s));
+        var checkpoint = CheckpointPath(conversationId);
+        Assert.True(File.Exists(checkpoint));
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(checkpoint)); // intact, not torn
+    }
+
+    [Fact]
+    public async Task AcquireAsync_same_conversation_blocks_until_released()
+    {
+        var sessions = new ConversationSessions(
+            Path.Combine(Path.GetTempPath(), $"sessions-{Guid.NewGuid():N}"));
+
+        var held = await sessions.AcquireAsync("c-lock");
+
+        var acquire = sessions.AcquireAsync("c-lock");
+        var winner = await Task.WhenAny(acquire, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.NotSame(acquire, winner);                    // blocked: timeout won
+        // Releasing `held` lets the pending acquire through; exactly one
+        // release happens — inside the helper (never also `await using`).
+        await using var releaser = await ReleaseAfter(acquire, held);
+
+        async Task<ConversationSessions.SemaphoreReleaser> ReleaseAfter(
+            Task<ConversationSessions.SemaphoreReleaser> pending, ConversationSessions.SemaphoreReleaser toRelease)
+        {
+            await toRelease.DisposeAsync();
+            return await pending;
+        }
+    }
+
+    [Fact]
+    public async Task AcquireAsync_different_conversations_do_not_block()
+    {
+        var sessions = new ConversationSessions(
+            Path.Combine(Path.GetTempPath(), $"sessions-{Guid.NewGuid():N}"));
+
+        await using var first = await sessions.AcquireAsync("c-a");
+        await using var second = await sessions.AcquireAsync("c-b"); // must not block
+
+        Assert.NotSame(first, second);
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     /// <summary>A factory whose chat client is the scripted fake and whose
