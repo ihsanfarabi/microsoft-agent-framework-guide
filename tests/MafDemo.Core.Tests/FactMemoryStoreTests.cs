@@ -82,6 +82,39 @@ public class FactMemoryStoreTests
     }
 
     [Fact]
+    public async Task SaveAsync_leaves_no_tmp_file_and_survives_reload()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        var store = new FactMemoryStore(CreateEmbedder());
+        await store.AddAsync("u1", EmailFact);
+
+        await store.SaveAsync(path);
+
+        Assert.False(File.Exists(path + ".tmp"));
+        Assert.True(File.Exists(path));
+
+        var reloaded = new FactMemoryStore(CreateEmbedder());
+        await reloaded.LoadAsync(path);
+        Assert.Single(await reloaded.ListAsync("u1"));
+        File.Delete(path);
+    }
+
+    [Fact]
+    public async Task LoadAsync_corrupt_file_quarantines_and_starts_empty()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        File.WriteAllText(path, "{ truncated");   // e.g. a kill mid-save
+
+        var store = new FactMemoryStore(CreateEmbedder());
+        await store.LoadAsync(path);              // must not throw
+
+        Assert.Empty(await store.ListAsync("u1"));
+        Assert.True(File.Exists(path + ".corrupt")); // bad data preserved
+        Assert.False(File.Exists(path));
+        File.Delete(path + ".corrupt");
+    }
+
+    [Fact]
     public async Task AddAsync_unknown_text_never_collides_with_table_vectors()
     {
         var store = new FactMemoryStore(CreateEmbedder());

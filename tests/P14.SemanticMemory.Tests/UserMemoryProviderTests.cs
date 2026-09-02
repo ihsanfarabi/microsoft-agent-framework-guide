@@ -207,8 +207,9 @@ public class UserMemoryProviderTests
     [Fact]
     public async Task TryLoadAsync_with_corrupt_facts_file_starts_empty_instead_of_throwing()
     {
-        // FactMemoryStore.LoadAsync throws on corrupt JSON (only a MISSING file
-        // is fail-soft); the startup guard must degrade to an empty store.
+        // FactMemoryStore.LoadAsync itself quarantines a corrupt file and starts
+        // empty (returns normally); TryLoadAsync therefore reports success with
+        // no warning. The corrupt file is preserved as <path>.corrupt.
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
         await File.WriteAllTextAsync(path, "{ not valid json ]");
 
@@ -216,10 +217,11 @@ public class UserMemoryProviderTests
         string? reported = null;
         var loaded = await FactStoreStartup.TryLoadAsync(store, path, warning => reported = warning);
 
-        Assert.False(loaded);
-        Assert.Contains("unreadable", reported);
+        Assert.True(loaded);
+        Assert.Null(reported);
+        Assert.True(File.Exists(path + ".corrupt"));
         Assert.Empty(await store.RecallAsync(UserMemoryProvider.DefaultUserId, RecallQuery)); // store still usable
-        File.Delete(path);
+        File.Delete(path + ".corrupt");
     }
 
     [Fact]

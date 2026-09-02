@@ -1,12 +1,12 @@
 namespace P14.SemanticMemory.Memory;
 
 /// <summary>
-/// Startup helper for loading a persisted <see cref="FactMemoryStore"/> from
-/// its JSON file. Repo convention (established in P08): startup must survive
+/// Startup helper for loading a persisted <see cref="MafDemo.Core.Memory.FactMemoryStore"/>
+/// from its JSON file. Repo convention (established in P08): startup must survive
 /// corrupt persisted state. <see cref="MafDemo.Core.Memory.FactMemoryStore.LoadAsync"/>
-/// is deliberately fail-soft only for a MISSING file — a corrupt/unreadable
-/// file throws there — so this helper owns the policy of degrading to an empty
-/// store instead of crashing the host.
+/// itself quarantines a corrupt file and starts empty; this helper is the outer
+/// guard for anything else that can go wrong reading the file (permissions, IO
+/// errors), degrading to an empty store instead of crashing the host.
 /// </summary>
 public static class FactStoreStartup
 {

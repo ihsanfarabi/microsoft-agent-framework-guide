@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CommunityToolkit.VectorData.InMemory;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
@@ -140,17 +141,27 @@ public sealed class FactMemoryStore
         return keys.Count;
     }
 
-    /// <summary>Serializes the fact collection to <paramref name="path"/> as JSON.</summary>
+    /// <summary>Serializes the fact collection to <paramref name="path"/> as JSON.
+    /// Atomic (tmp file + Move), so a crash mid-save leaves the previous file
+    /// intact instead of a truncated one that would brick the next startup —
+    /// the same discipline as FileTicketStore.</summary>
     public async Task SaveAsync(string path)
     {
         await _collection.EnsureCollectionExistsAsync();
-        using var stream = File.Create(path);
-        await _vectorStore.SerializeCollectionAsJsonAsync<string, MemoryFact>(CollectionName, stream);
+        var tmp = path + ".tmp";
+        using (var stream = File.Create(tmp))
+        {
+            await _vectorStore.SerializeCollectionAsJsonAsync<string, MemoryFact>(CollectionName, stream);
+        }
+        File.Move(tmp, path, overwrite: true);
     }
 
     /// <summary>
     /// Loads a previously saved collection from <paramref name="path"/>. A
-    /// missing file is treated as an empty store (no-op).
+    /// missing file is treated as an empty store (no-op); a corrupt or
+    /// unreadable file is moved to <c>&lt;path&gt;.corrupt</c> (preserved for
+    /// inspection) and the store starts empty — startup must survive corrupt
+    /// persisted state (P08 convention).
     /// </summary>
     public async Task LoadAsync(string path)
     {
@@ -159,8 +170,15 @@ public sealed class FactMemoryStore
             return;
         }
 
-        using var stream = File.OpenRead(path);
-        await _vectorStore.DeserializeCollectionFromJsonAsync<string, MemoryFact>(stream);
+        try
+        {
+            using var stream = File.OpenRead(path);
+            await _vectorStore.DeserializeCollectionFromJsonAsync<string, MemoryFact>(stream);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException)
+        {
+            File.Move(path, path + ".corrupt", overwrite: true);
+        }
     }
 
     private async Task<Embedding<float>> EmbedAsync(string text) =>
