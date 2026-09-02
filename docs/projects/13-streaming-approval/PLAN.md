@@ -27,8 +27,8 @@
 - Consumes: `MafDemo.AgentCommon.OllamaChat.Create()`, `MafDemo.Core.Stores.FileTicketStore` (P05/P08 pattern), `MafDemo.Core.Stores.FileTicketStore` ticket API used by P08.
 - Produces: `TicketAgent.Build(IChatClient)` → `ChatClientAgent` with `DeleteTicket`/`EscalateTicket` wrapped in `ApprovalRequiredAIFunction`, read-only auto-approve rules for list/query tools (`.UseToolApproval(new ToolApprovalAgentOptions{...})`); `PendingApprovals` store: `Add(ConversationId, requestId, request, session) → bool`, `Take(requestId) → (request, session)?`; endpoint `POST /conversations/{id}/messages` body `{"text": "..."}` → SSE.
 
-- [ ] **Step 1: scaffold** — csproj references AgentCommon + Core + `Microsoft.Agents.AI` 1.19.0 (copy csproj package block from `P08.HarnessAgent`); add to slnx. Suppress `MAAI001` experimental diag if `UseToolApproval` demands it (P08 already carries the NoWarn — mirror it).
-- [ ] **Step 2: failing SSE-contract test** — fake `IChatClient` scripted to yield text delta → `FunctionCallContent("DeleteTicket")`; assert the HTTP response content-type is `text/event-stream` and frames parse: first a delta frame, then an `event: approval` frame carrying a requestId. Shape (exact test code refined while writing the real `Program` types together in step 4):
+- [x] **Step 1: scaffold** — csproj references AgentCommon + Core + `Microsoft.Agents.AI` 1.19.0 (copy csproj package block from `P08.HarnessAgent`); add to slnx. Suppress `MAAI001` experimental diag if `UseToolApproval` demands it (P08 already carries the NoWarn — mirror it).
+- [x] **Step 2: failing SSE-contract test** — fake `IChatClient` scripted to yield text delta → `FunctionCallContent("DeleteTicket")`; assert the HTTP response content-type is `text/event-stream` and frames parse: first a delta frame, then an `event: approval` frame carrying a requestId. Shape (exact test code refined while writing the real `Program` types together in step 4):
 
 ```csharp
 [Fact]
@@ -43,16 +43,16 @@ public async Task Message_stream_emits_approval_event_on_gated_call()
 }
 ```
 (If raw `WebApplication` test-host wiring fights, test the stream *writer* as a pure function over an `IAsyncEnumerable<AgentResponseUpdate>` — same contract, no Kestrel.)
-- [ ] **Step 3: run** `rtk dotnet test tests/P13.StreamingApproval.Tests` → FAIL.
-- [ ] **Step 4: implement** — `TicketAgent.Build` per P08 `HarnessFacts` shape; `Program.cs` endpoint: iterate `agent.RunStreamingAsync(new ChatMessage(user,text), session)`, forward text as `data: {"delta":…}` frames; on update containing `ToolApprovalRequestContent` → store `{conversationId, request, session}` in `PendingApprovals`, emit `event: approval {"requestId","tool","args"}`, end. Frame mapping in a plain method so the fake-client test runs offline.
-- [ ] **Step 5:** tests green + manual smoke `dotnet run` + script curl. Commit `feat(p13): approval-aware SSE message endpoint`.
+- [x] **Step 3: run** `rtk dotnet test tests/P13.StreamingApproval.Tests` → FAIL.
+- [x] **Step 4: implement** — `TicketAgent.Build` per P08 `HarnessFacts` shape; `Program.cs` endpoint: iterate `agent.RunStreamingAsync(new ChatMessage(user,text), session)`, forward text as `data: {"delta":…}` frames; on update containing `ToolApprovalRequestContent` → store `{conversationId, request, session}` in `PendingApprovals`, emit `event: approval {"requestId","tool","args"}`, end. Frame mapping in a plain method so the fake-client test runs offline.
+- [x] **Step 5:** tests green + manual smoke `dotnet run` + script curl. Commit `feat(p13): approval-aware SSE message endpoint`.
 
 ### Task 2: Approval round trip (approve / decline / always-approve)
 
 **Files:** Modify `src/P13.StreamingApproval/Program.cs`; Test: same file as Task 1.
 
-- [ ] **Step 1: failing test** — with the scripted fake, resume after `POST /approvals/{id}` `{approved:true}` produces a second SSE whose content includes the resumed tool result; decline path produces a narrated refusal frame (fake returns "denied" behavior via tool result content). 
-- [ ] **Step 2: implement endpoint**
+- [x] **Step 1: failing test** — with the scripted fake, resume after `POST /approvals/{id}` `{approved:true}` produces a second SSE whose content includes the resumed tool result; decline path produces a narrated refusal frame (fake returns "denied" behavior via tool result content). 
+- [x] **Step 2: implement endpoint**
 ```csharp
 group.MapPost("/approvals/{conversationId}", async (string conversationId, ApprovalVote vote) =>
 {
@@ -64,16 +64,16 @@ group.MapPost("/approvals/{conversationId}", async (string conversationId, Appro
 });
 ```
 Also support `{"approveAlways": true}` → `request.CreateAlwaysApproveToolResponse()`.
-- [ ] **Step 3:** tests green; live demo: approve once with real Ollama, decline once. Commit `feat(p13): approval round-trip with decline + always-approve`.
+- [x] **Step 3:** tests green; live demo: approve once with real Ollama, decline once. Commit `feat(p13): approval round-trip with decline + always-approve`.
 
 ### Task 3: Session persistence + multi-turn + bursts
 
-- [ ] **Step 1:** checkpoint each conversation to disk after every stream ends (`SerializeSessionAsync` → `sessions/{id}.json`, P08 pattern); load on demand. `POST` second message must recall first message.
-- [ ] **Step 2:** guard the burst: `PendingApprovals` keyed by conversation must queue; demo answers every surfaced request (fake-client unit test: two `FunctionCallContent` frames → two approval events). If glm-5.3 actually bursts, record as NOTES.
-- [ ] **Step 3:** commit `feat(p13): conversation persistence + multi-request approvals`.
+- [x] **Step 1:** checkpoint each conversation to disk after every stream ends (`SerializeSessionAsync` → `sessions/{id}.json`, P08 pattern); load on demand. `POST` second message must recall first message.
+- [x] **Step 2:** guard the burst: `PendingApprovals` keyed by conversation must queue; demo answers every surfaced request (fake-client unit test: two `FunctionCallContent` frames → two approval events). If glm-5.3 actually bursts, record as NOTES.
+- [x] **Step 3:** commit `feat(p13): conversation persistence + multi-request approvals`.
 
 ### Task 4: Client demo + docs
 
-- [ ] **Step 1:** `scripts/demo13.sh` — curl `-N` SSE message call, capture approval JSON, second curl posts the vote, print resumed text.
-- [ ] **Step 2:** `docs/projects/13-streaming-approval/NOTES.md` — OpenAI-compat layer drops approval content (link processor source), pending-request in-memory tradeoff, burst behavior of this model.
-- [ ] **Step 3:** README ladder + PORTFOLIO row; full suite green; commit `docs(p13): notes + portfolio entries`.
+- [x] **Step 1:** `scripts/demo13.sh` — curl `-N` SSE message call, capture approval JSON, second curl posts the vote, print resumed text.
+- [x] **Step 2:** `docs/projects/13-streaming-approval/NOTES.md` — OpenAI-compat layer drops approval content (link processor source), pending-request in-memory tradeoff, burst behavior of this model.
+- [x] **Step 3:** README ladder + PORTFOLIO row; full suite green; commit `docs(p13): notes + portfolio entries`.

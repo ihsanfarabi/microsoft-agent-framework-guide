@@ -1,6 +1,6 @@
 # MAF Demo — HelpDeskHQ (C# Learning Curriculum)
 
-[![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
+[![ci](https://github.com/ihsanfarabi/microsoft-agent-framework-guide/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/microsoft-agent-framework-guide/actions/workflows/ci.yml)
 
 15 projects, basic to advanced, one continuous app: **HelpDeskHQ**, an IT
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
@@ -54,8 +54,6 @@ Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 | 13 | streaming-approval | `UseToolApproval`, SSE streaming, HITL | Delete needs an operator vote mid-stream |
 | 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD | Remembers your preference across process restarts |
 | 15 | distributed-workflow | graph workflows over remote A2A agents, conditional edges | One graph, two remote agents, dead hop fails visibly |
-| 14 | semantic-memory | `ChatHistoryMemoryProvider`, custom `AIContextProvider`, MEVD vector store | Remembers your preferences across process restarts |
-| 15 | distributed-workflow | graph workflows across A2A, conditional edges, failure visibility | One graph, two remote agent hops — skip a dead one, visibly |
 
 ## Setup (once)
 

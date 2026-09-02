@@ -32,7 +32,7 @@
 **Interfaces:**
 - Produces: `static class BacklogSeed { public static async Task RunAsync(ITicketStore store); }` — idempotent: skips if ≥5 tickets exist
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new console -n P08.HarnessAgent -o src/P08.HarnessAgent -f net10.0
@@ -44,7 +44,7 @@ dotnet sln add tests/P08.HarnessAgent.Tests
 dotnet add tests/P08.HarnessAgent.Tests reference src/P08.HarnessAgent
 ```
 
-- [ ] **Step 2: Write failing test** (in `tests/P08.HarnessAgent.Tests/BacklogSeedTests.cs`)
+- [x] **Step 2: Write failing test** (in `tests/P08.HarnessAgent.Tests/BacklogSeedTests.cs`)
 
 ```csharp
 [Fact]
@@ -58,9 +58,9 @@ public async Task Seed_creates_five_tickets_and_is_idempotent()
 }
 ```
 
-- [ ] **Step 3: Run, verify FAIL** — `dotnet test --filter BacklogSeed`
+- [x] **Step 3: Run, verify FAIL** — `dotnet test --filter BacklogSeed`
 
-- [ ] **Step 4: Implement** `src/P08.HarnessAgent/BacklogSeed.cs`:
+- [x] **Step 4: Implement** `src/P08.HarnessAgent/BacklogSeed.cs`:
 
 ```csharp
 namespace P08.HarnessAgent;
@@ -86,9 +86,9 @@ public static class BacklogSeed
 }
 ```
 
-- [ ] **Step 5: Run, verify PASS** — `dotnet test --filter BacklogSeed`
+- [x] **Step 5: Run, verify PASS** — `dotnet test --filter BacklogSeed`
 
-- [ ] **Step 6: Commit** — `feat(p08): backlog seed with idempotency test`
+- [x] **Step 6: Commit** — `feat(p08): backlog seed with idempotency test`
 
 ### Task 2: Harness agent + batch scenario
 
@@ -98,7 +98,7 @@ public static class BacklogSeed
 **Interfaces:**
 - Produces: `static class HarnessFacts { public static AIAgent Build(IChatClient client, AITool[] tools); }`
 
-- [ ] **Step 1: Write `HarnessFacts.cs`** — verified API:
+- [x] **Step 1: Write `HarnessFacts.cs`** — verified API:
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -127,7 +127,7 @@ public static class HarnessFacts
 }
 ```
 
-- [ ] **Step 2: Wire `Program.cs`** — build function-invoking client, resolve ticket tools (P02 factories over `FileTicketStore`), seed, create session, run `"Work the ticket backlog."`:
+- [x] **Step 2: Wire `Program.cs`** — build function-invoking client, resolve ticket tools (P02 factories over `FileTicketStore`), seed, create session, run `"Work the ticket backlog."`:
 
 ```csharp
 var client = new ChatClientBuilder(OllamaChat.Create()).UseFunctionInvocation().Build();
@@ -139,23 +139,23 @@ var result = await agent.RunAsync("Work the ticket backlog.", session);
 Console.WriteLine(result);
 ```
 
-- [ ] **Step 3: Run** — `dotnet run --project src/P08.HarnessAgent`
+- [x] **Step 3: Run** — `dotnet run --project src/P08.HarnessAgent`
 Expected: agent plans (todo tool calls), reads handbook files (`file_access_*`), adds notes per ticket. Watch `agent-file-memory/<session>/` populate.
 
-- [ ] **Step 4: Commit** — `feat(p08): harness batch scenario`
+- [x] **Step 4: Commit** — `feat(p08): harness batch scenario`
 
 ### Task 3: Approval gate (TDD)
 
 **Files:**
 - Create: `src/P08.HarnessAgent/ApprovalPolicy.cs`
-- Create: `src/P08.HarnessAgent/CloseTicketTool.cs` wrapper
+- Create: `src/P08.HarnessAgent/TicketTools.cs` (planned as a `CloseTicketTool.cs` wrapper; the local-tool rewrite shipped under this name — see NOTES Deviations)
 - Test: `tests/P08.HarnessAgent.Tests/ApprovalPolicyTests.cs`
 
 **Interfaces:**
 - Produces: `static class ApprovalPolicy { public static ValueTask<bool> ShouldAutoApprove(FunctionCallContent call); }`
 - Consumes: P02 `close_ticket` tool function
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```csharp
 [Fact]
@@ -173,9 +173,9 @@ public async Task Close_ticket_needs_human()
 }
 ```
 
-- [ ] **Step 2: Run, verify FAIL**
+- [x] **Step 2: Run, verify FAIL**
 
-- [ ] **Step 3: Implement** (rule signature per harness blog: `Func<FunctionCallContent, ValueTask<bool>>` — true = auto-approve, false = fall through to human prompt)
+- [x] **Step 3: Implement** (rule signature per harness blog: `Func<FunctionCallContent, ValueTask<bool>>` — true = auto-approve, false = fall through to human prompt)
 
 ```csharp
 using Microsoft.Extensions.AI;
@@ -187,32 +187,32 @@ public static class ApprovalPolicy
 }
 ```
 
-- [ ] **Step 4: Run, verify PASS**
+- [x] **Step 4: Run, verify PASS**
 
-- [ ] **Step 5: Wire approvals** — verified pattern from harness blog: wrap close tool with `new ApprovalRequiredAIFunction(AIFunctionFactory.Create(closeFn, "close_ticket"))`, then set approvals on the harness options (harness wires the approval middleware itself — do NOT also add `builder.UseToolApproval`, that's the standalone non-harness pattern): `HarnessAgentOptions.ToolApprovalAgentOptions = new ToolApprovalAgentOptions { AutoApprovalRules = [ApprovalPolicy.ShouldAutoApprove, FileAccessProvider.ReadOnlyToolsAutoApprovalRule] }`. Console handler: on approval request, print tool + args, read `y/n/a` (`a` = always-approve this tool → standing approval in session state).
+- [x] **Step 5: Wire approvals** — verified pattern from harness blog: wrap close tool with `new ApprovalRequiredAIFunction(AIFunctionFactory.Create(closeFn, "close_ticket"))`, then set approvals on the harness options (harness wires the approval middleware itself — do NOT also add `builder.UseToolApproval`, that's the standalone non-harness pattern): `HarnessAgentOptions.ToolApprovalAgentOptions = new ToolApprovalAgentOptions { AutoApprovalRules = [ApprovalPolicy.ShouldAutoApprove, FileAccessProvider.ReadOnlyToolsAutoApprovalRule] }`. Console handler: on approval request, print tool + args, read `y/n/a` (`a` = always-approve this tool → standing approval in session state).
 
-- [ ] **Step 6: Run batch** — expect per-close approval prompts; answer `a` once, later closes auto-pass. Kill before finishing for Task 4.
+- [x] **Step 6: Run batch** — expect per-close approval prompts; answer `a` once, later closes auto-pass. Kill before finishing for Task 4.
 
-- [ ] **Step 7: Commit** — `feat(p08): tool approval gate with standing approvals`
+- [x] **Step 7: Commit** — `feat(p08): tool approval gate with standing approvals`
 
 ### Task 4: Kill and resume
 
 **Files:**
 - Modify: `src/P08.HarnessAgent/Program.cs`
 
-- [ ] **Step 1: Persist session state** — verified API from session doc: on exit, `var serialized = await agent.SerializeSessionAsync(session);` written to `work/session-state/session.json`; on startup, if that file exists, `var session = await agent.DeserializeSessionAsync(serialized);` else `await agent.CreateSessionAsync()`. Restored session re-links to on-disk file memory by session id — keep the same `FileAccessStore`/`FileMemoryStore` paths across restarts.
+- [x] **Step 1: Persist session state** — verified API from session doc: on exit, `var serialized = await agent.SerializeSessionAsync(session);` written to `work/session-state/session.json`; on startup, if that file exists, `var session = await agent.DeserializeSessionAsync(serialized);` else `await agent.CreateSessionAsync()`. Restored session re-links to on-disk file memory by session id — keep the same `FileAccessStore`/`FileMemoryStore` paths across restarts.
 
-- [ ] **Step 2: Run batch, Ctrl-C after 2nd ticket closes.** Confirm `work/session-state/` written + file memory has entries.
+- [x] **Step 2: Run batch, Ctrl-C after 2nd ticket closes.** Confirm `work/session-state/` written + file memory has entries.
 
-- [ ] **Step 3: Restart** — resume with same session; run same prompt. Expected: agent sees todos, skips finished tickets, continues to completion.
+- [x] **Step 3: Restart** — resume with same session; run same prompt. Expected: agent sees todos, skips finished tickets, continues to completion.
 
-- [ ] **Step 4: Commit** — `feat(p08): session resume across restarts`
+- [x] **Step 4: Commit** — `feat(p08): session resume across restarts`
 
 ### Task 5: Notes + stretch
 
 **Files:**
 - Create: `docs/projects/08-harness-agent/NOTES.md`
 
-- [ ] **Step 1: NOTES.md** — what `AsHarnessAgent` wired vs P05-P07 manual wiring (bullets: history persistence per model call inside tool loop, todo state, file memory path, approval state in session).
-- [ ] **Step 2 (stretch):** plain `ChatClientAgent` + only `FileMemoryProvider` as context provider — observe what breaks without harness.
-- [ ] **Step 3: Commit** — `docs(p08): learning notes`
+- [x] **Step 1: NOTES.md** — what `AsHarnessAgent` wired vs P05-P07 manual wiring (bullets: history persistence per model call inside tool loop, todo state, file memory path, approval state in session).
+- [x] **Step 2 (stretch):** plain `ChatClientAgent` + only `FileMemoryProvider` as context provider — observe what breaks without harness.
+- [x] **Step 3: Commit** — `docs(p08): learning notes`

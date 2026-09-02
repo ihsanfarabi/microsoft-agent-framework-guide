@@ -29,9 +29,9 @@
 **Interfaces:**
 - Produces: `record HandbookChunk(string Doc, int Index, string Text)`; `static class HandbookChunker { IReadOnlyList<HandbookChunk> Chunk(string doc, string text, int maxChars = 500); }`
 
-- [ ] **Step 1: Write corpus docs** — each doc 3–6 short paragraphs with concrete checkable facts, e.g. `onboarding.md` must contain: "Employees get 25 vacation days per year." and "Laptops are refreshed every 4 years."; `vpn-policy.md`: "VPN reconnects must use MFA every 8 hours."; `rma-hardware.md`: "RMA requests must be filed within 14 days of failure." Keep every doc under ~1500 chars.
+- [x] **Step 1: Write corpus docs** — each doc 3–6 short paragraphs with concrete checkable facts, e.g. `onboarding.md` must contain: "Employees get 25 vacation days per year." and "Laptops are refreshed every 4 years."; `vpn-policy.md`: "VPN reconnects must use MFA every 8 hours."; `rma-hardware.md`: "RMA requests must be filed within 14 days of failure." Keep every doc under ~1500 chars.
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
 
 ```csharp
 // tests/MafDemo.Core.Tests/HandbookChunkerTests.cs
@@ -62,9 +62,9 @@ public class HandbookChunkerTests
 }
 ```
 
-- [ ] **Step 3: Run, verify FAIL** — `dotnet test tests/MafDemo.Core.Tests`
+- [x] **Step 3: Run, verify FAIL** — `dotnet test tests/MafDemo.Core.Tests`
 
-- [ ] **Step 4: Implement** — split on blank lines, greedily pack paragraphs up to `maxChars`, hard-split any paragraph exceeding `maxChars`:
+- [x] **Step 4: Implement** — split on blank lines, greedily pack paragraphs up to `maxChars`, hard-split any paragraph exceeding `maxChars`:
 
 ```csharp
 // src/MafDemo.Core/Handbook/HandbookChunker.cs
@@ -99,7 +99,7 @@ public static class HandbookChunker
 }
 ```
 
-- [ ] **Step 5: Run, verify PASS. Commit** — `feat(core): handbook corpus + chunker`
+- [x] **Step 5: Run, verify PASS. Commit** — `feat(core): handbook corpus + chunker`
 
 ### Task 2: Retriever (TDD with fake embedder)
 
@@ -111,7 +111,7 @@ public static class HandbookChunker
 - Produces: `interface IEmbedder { Task<float[]> EmbedAsync(string text); }`
 - Produces: `class HandbookRetriever(IEmbedder embedder)` — `Task BuildAsync(IReadOnlyList<HandbookChunk> chunks)`; `Task<IReadOnlyList<HandbookChunk>> SearchAsync(string query, int topK = 3)` (cosine similarity)
 
-- [ ] **Step 1: Write failing tests** — fake embedder maps keywords to fixed vectors:
+- [x] **Step 1: Write failing tests** — fake embedder maps keywords to fixed vectors:
 
 ```csharp
 // tests/MafDemo.Core.Tests/HandbookRetrieverTests.cs
@@ -156,11 +156,11 @@ public class HandbookRetrieverTests
 }
 ```
 
-- [ ] **Step 2: Run, verify FAIL.**
+- [x] **Step 2: Run, verify FAIL.**
 
-- [ ] **Step 3: Implement** — `BuildAsync` embeds every chunk (parallel), stores (vector, chunk); `SearchAsync` embeds query, ranks by cosine, returns top K. Cosine helper: dot/(‖a‖·‖b‖); guard zero norm → 0.
+- [x] **Step 3: Implement** — `BuildAsync` embeds every chunk (parallel), stores (vector, chunk); `SearchAsync` embeds query, ranks by cosine, returns top K. Cosine helper: dot/(‖a‖·‖b‖); guard zero norm → 0.
 
-- [ ] **Step 4: Run, verify PASS. Commit** — `feat(core): handbook retriever with cosine ranking`
+- [x] **Step 4: Run, verify PASS. Commit** — `feat(core): handbook retriever with cosine ranking`
 
 ### Task 3: Ollama embedder + context provider
 
@@ -172,9 +172,9 @@ public class HandbookRetrieverTests
 - Consumes: `IEmbedder`, `HandbookRetriever` (Task 2), `OllamaChat` pattern (P01)
 - Produces: `class OllamaEmbedder : IEmbedder` (model `nomic-embed-text`); `class HandbookContextProvider : AIContextProvider`
 
-- [ ] **Step 1: Scaffold project** — console `P04.HandbookRag`, add to sln, packages `Microsoft.Agents.AI --prerelease`, `OllamaSharp`, reference Core. `ollama pull nomic-embed-text`.
+- [x] **Step 1: Scaffold project** — console `P04.HandbookRag`, add to sln, packages `Microsoft.Agents.AI --prerelease`, `OllamaSharp`, reference Core. `ollama pull nomic-embed-text`.
 
-- [ ] **Step 2: `OllamaEmbedder`** — via OllamaSharp `OllamaApiClient.EmbedAsync` (verify method on https://learn.microsoft.com/en-us/dotnet/ai/quickstarts/chat-local-model + OllamaSharp docs):
+- [x] **Step 2: `OllamaEmbedder`** — via OllamaSharp `OllamaApiClient.EmbedAsync` (verify method on https://learn.microsoft.com/en-us/dotnet/ai/quickstarts/chat-local-model + OllamaSharp docs):
 
 ```csharp
 using MafDemo.Core.Handbook;
@@ -193,7 +193,7 @@ public class OllamaEmbedder : IEmbedder
 }
 ```
 
-- [ ] **Step 3: `HandbookContextProvider`** — verified pattern from context-providers doc:
+- [x] **Step 3: `HandbookContextProvider`** — verified pattern from context-providers doc:
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -221,7 +221,7 @@ public class HandbookContextProvider(HandbookRetriever retriever) : AIContextPro
 }
 ```
 
-- [ ] **Step 4: `HandbookBot` + `Program.cs`** — build index from `docs/corpus/*.md` at startup (chunk each file, `BuildAsync`), then:
+- [x] **Step 4: `HandbookBot` + `Program.cs`** — build index from `docs/corpus/*.md` at startup (chunk each file, `BuildAsync`), then:
 
 ```csharp
 var chatClient = OllamaChat.Create();                    // P01 helper (copy into P04 or promote to Core)
@@ -236,12 +236,12 @@ Console.WriteLine(await agent.RunAsync("How many vacation days do I get?"));
 ```
 (`ChatClientAgent` constructor overloads: if `(IChatClient, ChatClientAgentOptions)` doesn't exist, use the name/instructions overload + options — copy exact shape from context-providers doc sample.)
 
-- [ ] **Step 5: Run**
+- [x] **Step 5: Run**
 
 Run: `dotnet run --project src/P04.HandbookRag`
 Expected: "25 vacation days" + `[onboarding.md]` cited.
 
-- [ ] **Step 6: Commit** — `feat(p04): grounded handbook agent`
+- [x] **Step 6: Commit** — `feat(p04): grounded handbook agent`
 
 ### Task 4: Guardrail verification
 
@@ -249,15 +249,15 @@ Expected: "25 vacation days" + `[onboarding.md]` cited.
 - Modify: `src/P04.HandbookRag/Program.cs` (scenario list)
 - Create: `docs/projects/04-handbook-rag/NOTES.md`
 
-- [ ] **Step 1: Scripted scenarios** — corpus question (vacation days), corpus question from a different doc ("When must an RMA be filed?"), guardrail question ("What is the CEO's home address?"). Expected: two grounded + cited, third → "That is not in the handbook."
+- [x] **Step 1: Scripted scenarios** — corpus question (vacation days), corpus question from a different doc ("When must an RMA be filed?"), guardrail question ("What is the CEO's home address?"). Expected: two grounded + cited, third → "That is not in the handbook."
 
-- [ ] **Step 2: If guardrail fails** (model invents an answer): strengthen instructions, add "before answering, check the excerpts contain the fact verbatim" — record what worked in NOTES.md.
+- [x] **Step 2: If guardrail fails** (model invents an answer): strengthen instructions, add "before answering, check the excerpts contain the fact verbatim" — record what worked in NOTES.md.
 
-- [ ] **Step 3: NOTES.md** — bullets: auto-injection vs tool retrieval (see stretch), what the trace shows before model call, guardrail behavior.
+- [x] **Step 3: NOTES.md** — bullets: auto-injection vs tool retrieval (see stretch), what the trace shows before model call, guardrail behavior.
 
-- [ ] **Step 4: Commit** — `docs(p04): rag notes + guardrail verification`
+- [x] **Step 4: Commit** — `docs(p04): rag notes + guardrail verification`
 
 ### Task 5: Stretch
 
-- [ ] **Step 1:** `search_handbook` tool variant (P02 `AIFunctionFactory` pattern); run same questions; record when model used tool vs relied on injected context.
-- [ ] **Step 2: Commit** — `feat(p04): tool-based retrieval variant`
+- [x] **Step 1:** `search_handbook` tool variant (P02 `AIFunctionFactory` pattern); run same questions; record when model used tool vs relied on injected context.
+- [x] **Step 2: Commit** — `feat(p04): tool-based retrieval variant`

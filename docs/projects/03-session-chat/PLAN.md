@@ -29,7 +29,7 @@
 - Produces: `class FileTicketStore(string path) : ITicketStore` — JSON-file-backed; persists after every mutation; loads existing file on construction (missing file = starts empty)
 - Consumes: `Ticket`, `ITicketStore`, enums (P01)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```csharp
 // tests/MafDemo.Core.Tests/FileTicketStoreTests.cs
@@ -76,12 +76,12 @@ public class FileTicketStoreTests
 }
 ```
 
-- [ ] **Step 2: Run tests, verify FAIL**
+- [x] **Step 2: Run tests, verify FAIL**
 
 Run: `dotnet test tests/MafDemo.Core.Tests`
 Expected: compile error — `FileTicketStore` missing.
 
-- [ ] **Step 3: Implement** — load `List<Ticket>` from JSON in ctor (missing file → empty list), keep in-memory dict, rewrite whole file after each mutation via `System.Text.Json`:
+- [x] **Step 3: Implement** — load `List<Ticket>` from JSON in ctor (missing file → empty list), keep in-memory dict, rewrite whole file after each mutation via `System.Text.Json`:
 
 ```csharp
 // src/MafDemo.Core/Stores/FileTicketStore.cs
@@ -139,9 +139,9 @@ public class FileTicketStore(string path) : ITicketStore
 }
 ```
 
-- [ ] **Step 4: Run tests, verify PASS** — `dotnet test tests/MafDemo.Core.Tests`
+- [x] **Step 4: Run tests, verify PASS** — `dotnet test tests/MafDemo.Core.Tests`
 
-- [ ] **Step 5: Commit** — `feat(core): file-backed ticket store`
+- [x] **Step 5: Commit** — `feat(core): file-backed ticket store`
 
 ### Task 2: Session REPL
 
@@ -153,9 +153,9 @@ public class FileTicketStore(string path) : ITicketStore
 - Consumes: `TicketToolFunctions` + agent factory pattern (P02), `FileTicketStore` (Task 1)
 - Produces: REPL entry point
 
-- [ ] **Step 1: Scaffold** — `dotnet new console -n P03.SessionChat -o src/P03.SessionChat -f net10.0`; add to sln; add packages (P02 set); reference Core; copy `TicketToolFunctions.cs`, `TicketBot.cs`, OTel `Telemetry.cs` from P02.
+- [x] **Step 1: Scaffold** — `dotnet new console -n P03.SessionChat -o src/P03.SessionChat -f net10.0`; add to sln; add packages (P02 set); reference Core; copy `TicketToolFunctions.cs`, `TicketBot.cs` from P02; use `MafDemo.AgentCommon` for OTel wiring.
 
-- [ ] **Step 2: REPL with session** — verified session API:
+- [x] **Step 2: REPL with session** — verified session API:
 
 ```csharp
 var store = new FileTicketStore("tickets.json");
@@ -178,9 +178,9 @@ while (true)
 }
 ```
 
-- [ ] **Step 3: Run and verify in-process memory** — "my laptop model is LTX-2201" → "create a ticket for it" → "what's my laptop model?" — answered without restating.
+- [x] **Step 3: Run and verify in-process memory** — "my laptop model is LTX-2201" → "create a ticket for it" → "what's my laptop model?" — answered without restating.
 
-- [ ] **Step 4: Commit** — `feat(p03): session REPL`
+- [x] **Step 4: Commit** — `feat(p03): session REPL`
 
 ### Task 3: Session persistence + /switch
 
@@ -191,7 +191,7 @@ while (true)
 **Interfaces:**
 - Produces: `static class SessionPersistence { void Save(ChatClientAgent agent, AgentSession session, string id); Task<AgentSession> Load(ChatClientAgent agent, string id); }`
 
-- [ ] **Step 1: Implement save/load** — verified serialization API from session doc:
+- [x] **Step 1: Implement save/load** — verified serialization API from session doc:
 
 ```csharp
 public static class SessionPersistence
@@ -215,21 +215,21 @@ public static class SessionPersistence
 }
 ```
 
-- [ ] **Step 2: Wire `/switch <id>`** — `session = await SessionPersistence.Load(agent, id); sessionId = id;`
+- [x] **Step 2: Wire `/switch <id>`** — `session = await SessionPersistence.Load(agent, id); sessionId = id;`
 
-- [ ] **Step 3: Restart verification** — chat ("my laptop model is LTX-2201", create ticket), `/quit`, rerun, `/list`, `/switch <id>`, ask "what's my laptop model?" and "what was my last ticket?".
+- [x] **Step 3: Restart verification** — chat ("my laptop model is LTX-2201", create ticket), `/quit`, rerun, `/list`, `/switch <id>`, ask "what's my laptop model?" and "what was my last ticket?".
 
 Expected: both answered. **If history is lost** (session serialization carries only `StateBag` for local agents, not chat history — possible per docs), add a history provider step: capture conversation messages via a context provider (`StoreAIContextAsync` per P04 pattern) into the session's `StateBag`, and note the fallback in NOTES.md.
 
-- [ ] **Step 4: Verify ticket persistence** — `tickets.json` exists with the ticket from turn 1 after restart.
+- [x] **Step 4: Verify ticket persistence** — `tickets.json` exists with the ticket from turn 1 after restart.
 
-- [ ] **Step 5: Commit** — `feat(p03): session persistence across restarts`
+- [x] **Step 5: Commit** — `feat(p03): session persistence across restarts`
 
 ### Task 4: Wrap-up
 
 **Files:**
 - Create: `docs/projects/03-session-chat/NOTES.md`
 
-- [ ] **Step 1: NOTES.md** — bullets: session vs thread vs history provider (what actually held the memory after restart); what `StateBag` carried; where serialization boundary bit (if it did).
-- [ ] **Step 2 (stretch):** durable-fact context provider across different sessions (uses `AIContextProvider` + `ProviderSessionState` — P04 Task 3 pattern).
-- [ ] **Step 3: Commit** — `docs(p03): wrap-up notes`
+- [x] **Step 1: NOTES.md** — bullets: session vs thread vs history provider (what actually held the memory after restart); what `StateBag` carried; where serialization boundary bit (if it did).
+- [x] **Step 2 (stretch):** durable-fact context provider across different sessions (uses `AIContextProvider` + `ProviderSessionState` — P04 Task 3 pattern).
+- [x] **Step 3: Commit** — `docs(p03): wrap-up notes`

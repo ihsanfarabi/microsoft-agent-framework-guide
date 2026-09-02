@@ -28,7 +28,7 @@
 **Interfaces:**
 - Produces: `static class PiiRedactor { string Redact(string text); }` — used by P05 middleware, later projects
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```csharp
 using MafDemo.Core.Guardrails;
@@ -46,9 +46,9 @@ public class PiiRedactorTests
 }
 ```
 
-- [ ] **Step 2: Run, verify FAIL** — `dotnet test`
+- [x] **Step 2: Run, verify FAIL** — `dotnet test`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```csharp
 using System.Text.RegularExpressions;
@@ -67,9 +67,9 @@ public static partial class PiiRedactor
 }
 ```
 
-- [ ] **Step 4: Run, verify PASS** — `dotnet test`
+- [x] **Step 4: Run, verify PASS** — `dotnet test`
 
-- [ ] **Step 5: Commit** — `feat(core): pii redactor with tests`
+- [x] **Step 5: Commit** — `feat(core): pii redactor with tests`
 
 ### Task 2: Logging + redaction run middleware
 
@@ -81,7 +81,7 @@ public static partial class PiiRedactor
 - Consumes: `PiiRedactor.Redact`, `ITicketStore`, `OllamaChat.Create`
 - Produces: `static class RunMiddlewares { Logging(); Redaction(); }` returning middleware delegates; `TicketAgent.Create(ITicketStore store)`
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new console -n P05.GuardrailMiddleware -o src/P05.GuardrailMiddleware -f net10.0
@@ -91,9 +91,9 @@ dotnet add src/P05.GuardrailMiddleware package Microsoft.Agents.AI --prerelease
 dotnet add src/P05.GuardrailMiddleware package OllamaSharp
 ```
 
-- [ ] **Step 2: Ticket agent with tools** — port tool functions from P02 (`create_ticket`, `get_ticket`, `update_ticket_status` over `ITicketStore`, via `AIFunctionFactory.Create`), chat client wrapped with `UseFunctionInvocation()`.
+- [x] **Step 2: Ticket agent with tools** — port tool functions from P02 (`create_ticket`, `get_ticket`, `update_ticket_status` over `ITicketStore`, via `AIFunctionFactory.Create`), chat client wrapped with `UseFunctionInvocation()`.
 
-- [ ] **Step 3: Write run middlewares** — signatures from Global Constraints; transform input by redacting last user message, redact output text after inner run:
+- [x] **Step 3: Write run middlewares** — signatures from Global Constraints; transform input by redacting last user message, redact output text after inner run:
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -124,7 +124,7 @@ public static class RunMiddlewares
 ```
 (Streaming variant: same logic with `RunStreamingAsync` + `yield return`; required pair per doc — when only non-streaming func provided, it is used for both.)
 
-- [ ] **Step 4: Compose and run**
+- [x] **Step 4: Compose and run**
 
 ```csharp
 var baseAgent = TicketAgent.Create(store);
@@ -136,7 +136,7 @@ var agent = baseAgent
 ```
 Run a benign ask; expect `[log]` lines and normal answer.
 
-- [ ] **Step 5: Commit** — `feat(p05): logging + pii redaction run middleware`
+- [x] **Step 5: Commit** — `feat(p05): logging + pii redaction run middleware`
 
 ### Task 3: Tool approval function middleware
 
@@ -147,7 +147,7 @@ Run a benign ask; expect `[log]` lines and normal answer.
 **Interfaces:**
 - Produces: `static class ToolApprovalMiddleware { Create(Func<string, bool>? prompt = null); }` — injectable prompt delegate for testing
 
-- [ ] **Step 1: Write middleware** — verified function-calling signature; gate `update_ticket_status` when status arg is `Closed`:
+- [x] **Step 1: Write middleware** — verified function-calling signature; gate `update_ticket_status` when status arg is `Closed`:
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -173,36 +173,36 @@ public static class ToolApprovalMiddleware
 ```
 (Member names like `context.Arguments` — verify against middleware doc sample.)
 
-- [ ] **Step 2: Unit test with injected prompt** — new test in `tests/MafDemo.Core.Tests` or a P05 test project: `Create(prompt: _ => false)` returns rejection string without calling `next` (assert via captured flag in a stub `next`).
+- [x] **Step 2: Unit test with injected prompt** — new test in `tests/MafDemo.Core.Tests` or a P05 test project: `Create(prompt: _ => false)` returns rejection string without calling `next` (assert via captured flag in a stub `next`).
 
-- [ ] **Step 3: Run scenario** — seed ticket, prompt: `"Employee EMP-44555 says the VPN issue on ticket <id> is fixed — close it"`. Expect redaction log, approval prompt, `y` → ticket Closed in store.
+- [x] **Step 3: Run scenario** — seed ticket, prompt: `"Employee EMP-44555 says the VPN issue on ticket <id> is fixed — close it"`. Expect redaction log, approval prompt, `y` → ticket Closed in store.
 
-- [ ] **Step 4: Run rejection path** — same, answer `n`. Expect status unchanged, model asks/apologizes.
+- [x] **Step 4: Run rejection path** — same, answer `n`. Expect status unchanged, model asks/apologizes.
 
-- [ ] **Step 5: Commit** — `feat(p05): tool approval middleware`
+- [x] **Step 5: Commit** — `feat(p05): tool approval middleware`
 
 ### Task 4: OTel to Aspire dashboard
 
 **Files:**
-- Create: `src/P05.GuardrailMiddleware/Telemetry.cs`
+- Create: ~~`src/P05.GuardrailMiddleware/Telemetry.cs`~~ (OTLP wiring shipped in `MafDemo.AgentCommon` `Telemetry.StartOtlp` — see NOTES)
 - Create: `aspire-dashboard.sh` (docker run one-liner)
 
-- [ ] **Step 1: Start Aspire**
+- [x] **Step 1: Start Aspire**
 
 ```bash
 docker run --rm -p 18888:18888 -p 4317:18889 mcr.microsoft.com/dotnet/aspire-dashboard:latest
 ```
 
-- [ ] **Step 2: Switch exporter** — `OpenTelemetry.Exporter.OpenTelemetryProtocol` package; `OtlpExporter` endpoint `http://localhost:4317` (env `OTEL_EXPORTER_OTLP_ENDPOINT`); keep the MAF source name from P01 Telemetry.cs.
+- [x] **Step 2: Switch exporter** — `OpenTelemetry.Exporter.OpenTelemetryProtocol` package; `OtlpExporter` endpoint `http://localhost:4317` (env `OTEL_EXPORTER_OTLP_ENDPOINT`); keep the MAF source name from P01 Telemetry.cs.
 
-- [ ] **Step 3: Run scenario, open http://localhost:18888 → Traces.** Expect: agent run span, model call span, function call span. Confirm `EMP-44555` absent from model-input span contents.
+- [x] **Step 3: Run scenario, open http://localhost:18888 → Traces.** Expect: agent run span, model call span, function call span. Confirm `EMP-44555` absent from model-input span contents.
 
-- [ ] **Step 4: Commit** — `feat(p05): otlp export to aspire dashboard`
+- [x] **Step 4: Commit** — `feat(p05): otlp export to aspire dashboard`
 
 ### Task 5: NOTES
 
 **Files:**
 - Create: `docs/projects/05-guardrail-middleware/NOTES.md`
 
-- [ ] **Step 1:** Record: where each middleware type sits in the pipeline; redaction in run vs IChatClient middleware (stretch if done); what the trace showed.
-- [ ] **Step 2: Commit** — `docs(p05): learning notes`
+- [x] **Step 1:** Record: where each middleware type sits in the pipeline; redaction in run vs IChatClient middleware (stretch if done); what the trace showed.
+- [x] **Step 2: Commit** — `docs(p05): learning notes`

@@ -59,7 +59,7 @@ All API below verified against live MS Learn docs + NuGet on 2026-08-30. Latest 
 **Interfaces:**
 - Produces: `record InventoryItem(string Sku, string Model, int Available, int Reserved)`; `interface IInventoryStore { Task<IReadOnlyList<InventoryItem>> ListAsync(); Task<InventoryItem?> GetAsync(string sku); Task<bool> TryReserveAsync(string sku); }`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```csharp
 [Fact]
@@ -82,13 +82,13 @@ public async Task Reserve_out_of_stock_fails()
 }
 ```
 
-- [ ] **Step 2: Run, verify FAIL** — `dotnet test --filter Inventory`
+- [x] **Step 2: Run, verify FAIL** — `dotnet test --filter Inventory`
 
-- [ ] **Step 3: Implement** — record + interface as above; store = `Dictionary<string, InventoryItem>`, `TryReserveAsync` returns false when `Available == 0`, else `item with { Available-1, Reserved+1 }`. Add `void Seed(IReadOnlyList<InventoryItem>)`.
+- [x] **Step 3: Implement** — record + interface as above; store = `Dictionary<string, InventoryItem>`, `TryReserveAsync` returns false when `Available == 0`, else `item with { Available-1, Reserved+1 }`. Add `void Seed(IReadOnlyList<InventoryItem>)`.
 
-- [ ] **Step 4: Run, verify PASS**
+- [x] **Step 4: Run, verify PASS**
 
-- [ ] **Step 5: Commit** — `feat(p09): inventory domain + tests`
+- [x] **Step 5: Commit** — `feat(p09): inventory domain + tests`
 
 ### Task 2: Inventory A2A service
 
@@ -99,7 +99,7 @@ public async Task Reserve_out_of_stock_fails()
 - Consumes: `IInventoryStore` from Task 1, `OllamaChat.Create()` from P01
 - Produces: running A2A endpoint at `http://localhost:5199/a2a/inventory` + agent card
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new web -n P09.InventoryAgentService -o src/P09.InventoryAgentService -f net10.0
@@ -110,7 +110,7 @@ dotnet add src/P09.InventoryAgentService package A2A.AspNetCore --prerelease
 dotnet add src/P09.InventoryAgentService package OllamaSharp
 ```
 
-- [ ] **Step 2: Tools** (`InventoryTools.cs`)
+- [x] **Step 2: Tools** (`InventoryTools.cs`)
 
 ```csharp
 using AIFunctionFactory = Microsoft.Extensions.AI.AIFunctionFactory;
@@ -127,7 +127,7 @@ public static class InventoryTools
 ```
 (Async plumbing: prefer `Func<string, Task<...>>` overloads if `AIFunctionFactory.Create` supports them — adjust.)
 
-- [ ] **Step 3: `Program.cs`** — verified pattern (Global Constraints has full snippet):
+- [x] **Step 3: `Program.cs`** — verified pattern (Global Constraints has full snippet):
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -160,18 +160,18 @@ app.Run();
 ```
 Bind port 5199 explicitly (`builder.WebHost.UseUrls("http://localhost:5199")` or launchSettings) so client/card URLs are stable.
 
-- [ ] **Step 4: Run + verify card** — `dotnet run --project src/P09.InventoryAgentService` (background + tail polling), then
+- [x] **Step 4: Run + verify card** — `dotnet run --project src/P09.InventoryAgentService` (background + tail polling), then
 `curl http://localhost:5199/.well-known/agent.json` (docs disagree: probe `/.well-known/agent-card.json` too if 404).
 Expected: JSON card naming InventoryAgent.
 
-- [ ] **Step 5: Commit** — `feat(p09): inventory agent exposed via a2a`
+- [x] **Step 5: Commit** — `feat(p09): inventory agent exposed via a2a`
 
 ### Task 3: HelpDesk client consumes remote agent
 
 **Files:**
 - Create: `src/P09.HelpDeskClient/` console (`Program.cs`)
 
-- [ ] **Step 1: Scaffold + packages**
+- [x] **Step 1: Scaffold + packages**
 
 ```bash
 dotnet new console -n P09.HelpDeskClient -o src/P09.HelpDeskClient -f net10.0
@@ -180,14 +180,14 @@ dotnet add src/P09.HelpDeskClient package Microsoft.Agents.AI.A2A --prerelease
 dotnet add src/P09.HelpDeskClient package OllamaSharp
 ```
 
-- [ ] **Step 2: Discover + wrap remote agent** — verified API (MS Learn A2A agent service doc): `A2ACardResolver` takes the remote HOST base URI (it fetches the card from the well-known path — NOT the endpoint path):
+- [x] **Step 2: Discover + wrap remote agent** — verified API (MS Learn A2A agent service doc): `A2ACardResolver` takes the remote HOST base URI (it fetches the card from the well-known path — NOT the endpoint path):
 
 ```csharp
 var resolver = new A2ACardResolver(new Uri("http://localhost:5199"));
 AIAgent remote = await resolver.GetAIAgentAsync();  // card + AIAgent in one call
 ```
 
-- [ ] **Step 3: Use remote agent as tool** — helpdesk `ChatClientAgent` over Ollama with the remote `AIAgent` exposed as a function tool via `.AsAIFunction()` (verified extension name; NOT `AsAITool`):
+- [x] **Step 3: Use remote agent as tool** — helpdesk `ChatClientAgent` over Ollama with the remote `AIAgent` exposed as a function tool via `.AsAIFunction()` (verified extension name; NOT `AsAITool`):
 
 ```csharp
 var helpdesk = new ChatClientAgent(client, name: "HelpDeskAgent",
@@ -200,11 +200,11 @@ Prompt:
 "Ticket 4 needs a loaner laptop. Check stock and reserve one if possible."
 ```
 
-- [ ] **Step 4: Two-process run** — start inventory service, then client. Expected: client agent calls remote agent over HTTP, answer reflects real stock ("reserved ThinkPad T14" or "only MacBook available"). Watch inventory service logs for the A2A request.
+- [x] **Step 4: Two-process run** — start inventory service, then client. Expected: client agent calls remote agent over HTTP, answer reflects real stock ("reserved ThinkPad T14" or "only MacBook available"). Watch inventory service logs for the A2A request.
 
-- [ ] **Step 5: Trace check** — both processes exporting OTLP to Aspire dashboard; confirm span crosses the HTTP boundary.
+- [x] **Step 5: Trace check** — both processes exporting OTLP to Aspire dashboard; confirm span crosses the HTTP boundary.
 
-- [ ] **Step 6: Commit** — `feat(p09): helpdesk agent calls remote a2a inventory agent`
+- [x] **Step 6: Commit** — `feat(p09): helpdesk agent calls remote a2a inventory agent`
 
 ### Task 4: Durable workflow host
 
@@ -212,7 +212,7 @@ Prompt:
 - Create: `src/P09.DurableHost/` console (generic host) — `Program.cs`
 - Modify: `src/P07.ResolutionWorkflow/` — extract `BuildWorkflow` verbatim into a public factory (`ResolutionWorkflowFacts.cs`: `public static Workflow Build(ITicketStore store, HandbookRetriever retriever)`); Program.cs calls it. Graph topology/executor ids UNCHANGED.
 
-- [ ] **Step 1: Scaffold + verified packages**
+- [x] **Step 1: Scaffold + verified packages**
 
 ```bash
 dotnet new console -n P09.DurableHost -o src/P09.DurableHost -f net10.0
@@ -224,16 +224,16 @@ dotnet add src/P09.DurableHost package Microsoft.DurableTask.Worker.AzureManaged
 dotnet add src/P09.DurableHost package Microsoft.Extensions.Hosting
 ```
 
-- [ ] **Step 1b: Extract P07 factory** — move `BuildWorkflow` body verbatim into `src/P07.ResolutionWorkflow/ResolutionWorkflowFacts.cs`, public static, P07 Program.cs delegates to it. Run P07's own scenario once to confirm nothing broke.
+- [x] **Step 1b: Extract P07 factory** — move `BuildWorkflow` body verbatim into `src/P07.ResolutionWorkflow/ResolutionWorkflowFacts.cs`, public static, P07 Program.cs delegates to it. Run P07's own scenario once to confirm nothing broke.
 
-- [ ] **Step 2: Start scheduler emulator** (background + tail polling)
+- [x] **Step 2: Start scheduler emulator** (background + tail polling)
 
 ```bash
 docker run -d -p 8080:8080 -p 8082:8082 mcr.microsoft.com/dts/dts-emulator:latest
 ```
 (8080 = scheduler gRPC, 8082 = dashboard at http://localhost:8082. Verify with `docker ps` + `curl` before continuing.)
 
-- [ ] **Step 3: Host + client** — verified pattern (full snippets in Global Constraints):
+- [x] **Step 3: Host + client** — verified pattern (full snippets in Global Constraints):
 
 ```csharp
 string cs = Environment.GetEnvironmentVariable("DURABLE_TASK_SCHEDULER_CONNECTION_STRING")
@@ -267,16 +267,16 @@ await foreach (WorkflowEvent evt in run.WatchStreamAsync())
 
 Executor caveat: durable executors must be replay-safe — no ambient `Console.WriteLine`/clock/Random inside executors; P07 executors print only via the streaming event loop in Program.cs, so verify and move any stray prints out before hosting durably. Also: RequestPort forwards only the RESPONSE downstream — P07's approval executor already carries its own state, so nothing to persist, but confirm at runtime.
 
-- [ ] **Step 4: Run + kill mid-workflow** — schedule a run with a fresh ticket; when the workflow reaches the FixApproval RequestPort (DurableWorkflowWaitingForInputEvent), Ctrl-C the host WITHOUT answering.
+- [x] **Step 4: Run + kill mid-workflow** — schedule a run with a fresh ticket; when the workflow reaches the FixApproval RequestPort (DurableWorkflowWaitingForInputEvent), Ctrl-C the host WITHOUT answering.
 
-- [ ] **Step 5: Restart host** — restart, re-attach client to same task hub. Expected: workflow resumes from checkpoint — the paused instance is redelivered by the scheduler; completed steps not re-executed (verify in dashboard/trace).
+- [x] **Step 5: Restart host** — restart, re-attach client to same task hub. Expected: workflow resumes from checkpoint — the paused instance is redelivered by the scheduler; completed steps not re-executed (verify in dashboard/trace).
 
-- [ ] **Step 6: Commit** — `feat(p09): durable resolution workflow with kill-and-resume`
+- [x] **Step 6: Commit** — `feat(p09): durable resolution workflow with kill-and-resume`
 
 ### Task 5: Notes
 
 **Files:**
 - Create: `docs/projects/09-a2a-durable/NOTES.md`
 
-- [ ] **Step 1: NOTES.md** — bullets: A2A discovery flow (card at well-known path → HTTP+JSON binding), what changed vs in-process agent-tool from P06, durable checkpoint resume semantics (executors = activities, RequestPort = specialized dispatch), what the DTS emulator is standing in for, plus every runtime divergence from this plan's verified citations.
-- [ ] **Step 2: Commit** — `docs(p09): learning notes`
+- [x] **Step 1: NOTES.md** — bullets: A2A discovery flow (card at well-known path → HTTP+JSON binding), what changed vs in-process agent-tool from P06, durable checkpoint resume semantics (executors = activities, RequestPort = specialized dispatch), what the DTS emulator is standing in for, plus every runtime divergence from this plan's verified citations.
+- [x] **Step 2: Commit** — `docs(p09): learning notes`

@@ -14,7 +14,7 @@ and the agent resumes — same session, same pending tool call.
 - `POST /conversations/{id}/messages` streams text deltas as SSE frames; on a gated tool call it emits one `event: approval` frame with `requestId|tool|args` and ends the body.
 - `POST /approvals/{id}` body `{requestId, approved}` resumes the agent with the *same* session and tool call snapshot; response streams as SSE. Decline path produces a tool-result refusal the model narrates, not a crash.
 - Session checkpoint persists per conversation; a second message in the same conversation has prior context.
-- Client demo (`scripts/demo.sh`, curl) shows the full round trip.
+- Client demo (`scripts/demo13.sh`, curl) shows the full round trip.
 - OpenAI-compat layer limitation documented with source links.
 
 ## Key verified facts (P13 research)

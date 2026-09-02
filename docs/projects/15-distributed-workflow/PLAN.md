@@ -33,11 +33,11 @@ Reuse P09 client/server plumbing verbatim; no durability.
   `/a2a/diagnosis/message:send`. Answers are free-form (`string`) — **no
   session state**: the orchestrator owns sequencing.
 
-- [ ] **Step 1: create** — copy `P09.InventoryAgentService/Program.cs`, rename
+- [x] **Step 1: create** — copy `P09.InventoryAgentService/Program.cs`, rename
   agent to `DiagnosisAgent`, instructions "You diagnose IT tickets. Answer in
   ≤ 3 sentences. If the diagnosis mentions hardware, say NEEDS-HARDWARE." Port
   5200 (`ASPNETCORE_URLS` + launchSettings, per P10 lesson — no `UseUrls`).
-- [ ] **Step 2: verify** — run, curl `POST http://localhost:5200/a2a/diagnosis/message:send`, expect diagnosis text. Stop. Commit `feat(p15): DiagnosisAgent A2A service on :5200`.
+- [x] **Step 2: verify** — run, curl `POST http://localhost:5200/a2a/diagnosis/message:send`, expect diagnosis text. Stop. Commit `feat(p15): DiagnosisAgent A2A service on :5200`.
 
 ### Task 2: OrchestratorHost — graph with two remote hops
 
@@ -47,12 +47,12 @@ Reuse P09 client/server plumbing verbatim; no durability.
 - Consumes: `P09.HelpDeskClient`'s resolver pattern; P07 conditional-edge style.
 - Produces: console running two scenarios.
 
-- [ ] **Step 1: resolve both remote agents**
+- [x] **Step 1: resolve both remote agents**
 ```csharp
 AIAgent diagnosis = await new A2ACardResolver(new Uri("http://localhost:5200")).GetAIAgentAsync();
 AIAgent inventory = await new A2ACardResolver(new Uri("http://localhost:5199")).GetAIAgentAsync();
 ```
-- [ ] **Step 2: build the graph** — `TriageExecutor : Executor` (P07 pattern:
+- [x] **Step 2: build the graph** — `TriageExecutor : Executor` (P07 pattern:
   `Ingest(string, IWorkflowContext, CancellationToken)` emitting
   `ChatMessage`), then
 ```csharp
@@ -67,24 +67,24 @@ var run = await InProcessExecution.RunAsync(workflow, "ticket: laptop won't boot
 ```
 (Exact input/output types resolved against `ChatProtocol` at implementation;
 fallback wrapper `Executor` documented in SPEC if `AddEdge` inference fights.)
-- [ ] **Step 3: payoff demo** — run ticket A (software-only: skips inventory),
+- [x] **Step 3: payoff demo** — run ticket A (software-only: skips inventory),
   ticket B (hardware: both hops). Print which processes each hop hit. Verify
   in Aspire dashboard trace: one workflow, calls to two different A2A targets.
-- [ ] **Step 4: commit** `feat(p15): workflow graph across two remote A2A agents`.
+- [x] **Step 4: commit** `feat(p15): workflow graph across two remote A2A agents`.
 
 ### Task 3: Failure is visible
 
-- [ ] **Step 1:** demo = run hardware ticket with inventory service stopped →
+- [x] **Step 1:** demo = run hardware ticket with inventory service stopped →
   workflow fails with exception naming the A2A endpoint; assert via console
   output, and in streaming mode surfaced as `WorkflowErrorEvent`.
-- [ ] **Step 2:** handle-or-propagate decision documented (choose propagate —
+- [x] **Step 2:** handle-or-propagate decision documented (choose propagate —
   retries are a durable-host concern, P16 note). Commit `feat(p15): kill-service failure demo`.
 
 ### Task 4: Docs + portfolio
 
-- [ ] **Step 1:** `docs/projects/15-distributed-workflow/NOTES.md` — by-contract
+- [x] **Step 1:** `docs/projects/15-distributed-workflow/NOTES.md` — by-contract
   vs by-example gap; ChatProtocol boundary findings (payload types that broke,
   the shape that worked); why durability is deferred.
-- [ ] **Step 2:** README ladder + PORTFOLIO row (+1 line in architecture
+- [x] **Step 2:** README ladder + PORTFOLIO row (+1 line in architecture
   diagram if mermaid edit stays small). Full suite green.
-- [ ] **Step 3: commit** `docs(p15): notes + portfolio entries`.
+- [x] **Step 3: commit** `docs(p15): notes + portfolio entries`.

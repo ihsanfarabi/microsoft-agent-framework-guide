@@ -1,4 +1,4 @@
-[![ci](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/maf-demo/actions/workflows/ci.yml)
+[![ci](https://github.com/ihsanfarabi/microsoft-agent-framework-guide/actions/workflows/ci.yml/badge.svg)](https://github.com/ihsanfarabi/microsoft-agent-framework-guide/actions/workflows/ci.yml)
 
 # MafDemo — Microsoft Agent Framework curriculum
 
@@ -72,7 +72,7 @@ scan.
 
 | Item | Closes what | Where it would land |
 |---|---|---|
-| ~~HandbookCorpus consolidation~~ | 4 hand-rolled handbook loaders across projects drift independently | **Done** — `HandbookCorpus.Locate()` in `MafDemo.Core`, 7 copies collapsed (P04, P06, P07, P08, P09, P10, P12) |
+| ~~HandbookCorpus consolidation~~ | 7 hand-rolled handbook loaders across projects drift independently | **Done** — `HandbookCorpus.Locate()` in `MafDemo.Core`, 7 copies collapsed (P04, P06, P07, P08, P09, P10, P12) |
 | Static demo page | No viewer-friendly UI; approval flow is curl-only | 1-hour HTML page over P10's chat endpoint — outside the ladder, no project |
 | MEAI Evaluation port | Eval harness is hand-rolled in `MafDemo.Core` | Port to `Microsoft.Extensions.AI.Evaluation` 10.9.0 `DiskBasedReportingConfiguration` (response-cached evals) |
 | Multi-model routing | Single fixed model per project | MEAI `SemanticRoutingChatClient` / `OrderedFailoverChatClient` / `ConfigureOptionsChatClient`; MAF `RoutePersistingRoutingChatClient` |
@@ -112,7 +112,9 @@ scheduler state. Full walkthrough in `docs/projects/09-a2a-durable/NOTES.md`.
 
 ## Layout
 
-- `src/P*` — one folder per curriculum project; `MafDemo.Core` holds shared
+- `src/P*` — one or more folders per curriculum project (multi-service
+  projects get one folder per service: P09 and P15 have three and two);
+  `MafDemo.Core` holds shared
   handbook corpus loading, chunking, and the eval harness.
 - `docs/corpus` — the MafCorp handbook markdown the RAG projects index.
 - `docs/projects/<n>-*/PLAN.md` — per-project learning plan, `NOTES.md` —

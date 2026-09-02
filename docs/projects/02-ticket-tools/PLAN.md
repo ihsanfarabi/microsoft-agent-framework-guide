@@ -38,7 +38,7 @@
     - `Task<string> AddTicketNoteAsync(string id, string note)`
 - Consumes: `MafDemo.Core` `ITicketStore`, `Ticket`, enums (P01 Task 1)
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new console -n P02.TicketTools -o src/P02.TicketTools -f net10.0
@@ -50,7 +50,7 @@ dotnet add src/P02.TicketTools package Microsoft.Agents.AI --prerelease
 dotnet add src/P02.TicketTools package OllamaSharp
 ```
 
-- [ ] **Step 2: Write failing tests** (no LLM — store logic only)
+- [x] **Step 2: Write failing tests** (no LLM — store logic only)
 
 ```csharp
 // tests/P02.TicketTools.Tests/TicketToolFunctionsTests.cs
@@ -94,12 +94,12 @@ public class TicketToolFunctionsTests
 }
 ```
 
-- [ ] **Step 3: Run tests, verify FAIL**
+- [x] **Step 3: Run tests, verify FAIL**
 
 Run: `dotnet test tests/P02.TicketTools.Tests`
 Expected: compile error — class missing.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 ```csharp
 // src/P02.TicketTools/TicketToolFunctions.cs
@@ -141,9 +141,9 @@ public class TicketToolFunctions(ITicketStore store)
 }
 ```
 
-- [ ] **Step 5: Run tests, verify PASS** — `dotnet test tests/P02.TicketTools.Tests`
+- [x] **Step 5: Run tests, verify PASS** — `dotnet test tests/P02.TicketTools.Tests`
 
-- [ ] **Step 6: Commit** — `feat(p02): ticket tool functions with tests`
+- [x] **Step 6: Commit** — `feat(p02): ticket tool functions with tests`
 
 ### Task 2: Agent with tools
 
@@ -155,7 +155,7 @@ public class TicketToolFunctions(ITicketStore store)
 - Consumes: `TicketToolFunctions` (Task 1), `OllamaChat.Create()` (P01)
 - Produces: `static class TicketBot { public static ChatClientAgent Create(); }`
 
-- [ ] **Step 1: Write agent factory** — tool pipeline is the verified pattern:
+- [x] **Step 1: Write agent factory** — tool pipeline is the verified pattern:
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -184,9 +184,9 @@ public static class TicketBot
 }
 ```
 
-- [ ] **Step 2: Wire tools per tools doc sample** — likely `new ChatClientAgent(chatClient, options: new ChatClientAgentOptions { ChatOptions = new() { Tools = [ AIFunctionFactory.Create(tools.CreateTicketAsync), ... ] } })`. Copy exact syntax from the doc sample; register all four methods.
+- [x] **Step 2: Wire tools per tools doc sample** — likely `new ChatClientAgent(chatClient, options: new ChatClientAgentOptions { ChatOptions = new() { Tools = [ AIFunctionFactory.Create(tools.CreateTicketAsync), ... ] } })`. Copy exact syntax from the doc sample; register all four methods.
 
-- [ ] **Step 3: Scripted scenario in `Program.cs`**
+- [x] **Step 3: Scripted scenario in `Program.cs`**
 
 ```csharp
 var store = new InMemoryTicketStore();
@@ -196,23 +196,23 @@ Console.WriteLine(await agent.RunAsync("List my tickets."));
 Console.WriteLine(await agent.RunAsync("Mark the VPN ticket resolved."));
 ```
 
-- [ ] **Step 4: Run**
+- [x] **Step 4: Run**
 
 Run: `dotnet run --project src/P02.TicketTools`
 Expected: ticket ID echoed, listing shows it, status updated. Verify store state printed at exit (`store.ListAsync()` — 1 ticket, Resolved).
 
-- [ ] **Step 5: Commit** — `feat(p02): ticket bot with function tools`
+- [x] **Step 5: Commit** — `feat(p02): ticket bot with function tools`
 
 ### Task 3: Trace the tool loop
 
 **Files:**
 - Modify: `src/P02.TicketTools/Program.cs` (add OTel console wiring, P01 Task 4 pattern)
 
-- [ ] **Step 1: Enable OTel console exporter** (reuse P01 `Telemetry.cs` pattern).
+- [x] **Step 1: Enable OTel console exporter** (reuse the P01 OTel pattern — shipped as `MafDemo.AgentCommon` `Telemetry.StartOtlp`, not a P01-local file).
 
-- [ ] **Step 2: Run scenario** — expect spans showing: model call → function invocation → model call. Record the function-call span names in `NOTES.md`.
+- [x] **Step 2: Run scenario** — expect spans showing: model call → function invocation → model call. Record the function-call span names in `NOTES.md`.
 
-- [ ] **Step 3: Commit** — `docs(p02): tool loop trace notes`
+- [x] **Step 3: Commit** — `docs(p02): tool loop trace notes`
 
 ### Task 4: MCP server tools
 
@@ -220,11 +220,11 @@ Expected: ticket ID echoed, listing shows it, status updated. Verify store state
 - Create: `sandbox/readme.txt` (test content)
 - Modify: `src/P02.TicketTools/TicketBot.cs` + `Program.cs`
 
-- [ ] **Step 1: Add package** — `dotnet add src/P02.TicketTools package ModelContextProtocol` (name per MCP integration doc: https://learn.microsoft.com/en-us/agent-framework/integrations/by-component/tools/mcp).
+- [x] **Step 1: Add package** — `dotnet add src/P02.TicketTools package ModelContextProtocol` (name per MCP integration doc: https://learn.microsoft.com/en-us/agent-framework/integrations/by-component/tools/mcp).
 
-- [ ] **Step 2: Pick stdio server** — filesystem server via npx: create `sandbox/` with `readme.txt` inside; server command `npx -y @modelcontextprotocol/server-filesystem <abs-path-to-sandbox>`.
+- [x] **Step 2: Pick stdio server** — filesystem server via npx: create `sandbox/` with `readme.txt` inside; server command `npx -y @modelcontextprotocol/server-filesystem <abs-path-to-sandbox>`.
 
-- [ ] **Step 3: Wire MCP client** — per doc pattern:
+- [x] **Step 3: Wire MCP client** — per doc pattern:
 
 ```csharp
 // sketch — copy exact client creation from MCP integration doc sample
@@ -233,16 +233,16 @@ IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync();
 // cast to AITool and merge with function tools in agent options
 ```
 
-- [ ] **Step 4: Scenario** — add run: `"What files are in the sandbox and what does the readme say?"`
+- [x] **Step 4: Scenario** — add run: `"What files are in the sandbox and what does the readme say?"`
 Expected: agent lists files via MCP tool, summarizes readme.
 
-- [ ] **Step 5: Run, verify. Commit** — `feat(p02): mcp server tools merged into ticket bot`
+- [x] **Step 5: Run, verify. Commit** — `feat(p02): mcp server tools merged into ticket bot`
 
 ### Task 5: Wrap-up
 
 **Files:**
 - Create: `docs/projects/02-ticket-tools/NOTES.md`
 
-- [ ] **Step 1: NOTES.md** — bullets: how the model chose tools; difference between function tools and MCP tools from the app's perspective; one trace observation.
-- [ ] **Step 2 (stretch):** custom C# MCP server exposing `search_knowledge` over handbook corpus (seed for P04).
-- [ ] **Step 3: Commit** — `docs(p02): wrap-up notes`
+- [x] **Step 1: NOTES.md** — bullets: how the model chose tools; difference between function tools and MCP tools from the app's perspective; one trace observation.
+- [x] **Step 2 (stretch):** custom C# MCP server exposing `search_knowledge` over handbook corpus (seed for P04).
+- [x] **Step 3: Commit** — `docs(p02): wrap-up notes`

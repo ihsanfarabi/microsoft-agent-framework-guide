@@ -22,8 +22,8 @@ a second stdio client alongside its filesystem server.
   `dotnet build -o <tmp>` prebuilt-binary fallback was ever needed.
 - **Corpus resolution from a child working dir**: `ChunkCache` accepts
   `args[0]` if it's an existing directory, else walks up from
-  `AppContext.BaseDirectory` to `docs/corpus` (same pattern as P10's
-  `FindCorpusDirectory`). The child inherits whatever cwd the client spawns it
+  `AppContext.BaseDirectory` to `docs/corpus` (the walk-up now lives in Core
+  as `HandbookCorpus.Locate(overridePath)`, which `ChunkCache` calls). The child inherits whatever cwd the client spawns it
   with, so the walk-up is what makes the launch robust from any `bin/` dir.
 - **Lazy one-shot loading** (`LazyThreadSafetyMode.ExecutionAndPublication`
   static `ChunkCache`) — the corpus is read once, then every tool call is pure
@@ -54,8 +54,9 @@ a second stdio client alongside its filesystem server.
 - **The brief's `HandbookCorpus.LoadAll` doesn't exist.** The plan said "same
   loader P04 uses" — no such loader exists in Core or P04 (P04 loads the corpus
   inline in `Program.cs`). Task 1 wrote a test-local loader; Task 2 promoted
-  that shape into the server's `ChunkCache`. A shared loader in Core is still
-  owed (see "differently next time").
+  that shape into the server's `ChunkCache`. A shared loader in Core was still
+  owed at the time — shipped post-track as `HandbookCorpus.Locate()` in
+  `MafDemo.Core` (see below).
 - **The scorer's tie-break exists because of the real corpus.** On the
   textbook example the spec formula ties three ways: for query "password
   expired", `password-reset.md`, `onboarding.md`, and `wifi-setup.md` each
@@ -66,10 +67,12 @@ a second stdio client alongside its filesystem server.
 
 ## What to do differently next time
 
-- Promote the handbook loader into `MafDemo.Core` (`HandbookCorpus.LoadAll` was
-  the right *idea*, wrong assumption about it existing). Three consumers now
-  hand-roll the same walk-up + chunk loop: P04 inline, the Task 1 test, and
-  `ChunkCache`.
+- ~~Promote the handbook loader into `MafDemo.Core`~~ — **done post-track**:
+  `HandbookCorpus.Locate()` lives in `MafDemo.Core` now and P04, `ChunkCache`,
+  and five other loaders call it. (`HandbookCorpus.LoadAll` was the right
+  *idea*, wrong assumption about it existing — the API that shipped is
+  `Locate`, chunking stays at each call site.) Only the Task 1 test still
+  hand-rolls the walk-up.
 - Budget for the tie-break when writing a "simple formula" scorer test against
   real content, not synthetic chunks — the deterministic-ordering rule
   (frequency, then index) was an unplanned but necessary spec extension.

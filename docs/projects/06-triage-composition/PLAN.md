@@ -29,7 +29,7 @@
 - Consumes: `ITicketStore`, handbook retrieval (`search_handbook`) from P04, `OllamaChat.Create`
 - Produces: `static class Specialists { NetworkSpecialist(); SoftwareSpecialist(); HardwareSpecialist(); }` each returning a `ChatClientAgent`; `static class SpecialistTools { SearchHandbook(...); GetTicket(...); }`
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new console -n P06.TriageComposition -o src/P06.TriageComposition -f net10.0
@@ -42,15 +42,15 @@ dotnet sln add tests/P06.TriageComposition.Tests
 dotnet add tests/P06.TriageComposition.Tests reference src/P06.TriageComposition src/MafDemo.Core
 ```
 
-- [ ] **Step 2: Tool functions** — port `search_handbook` (P04 retrieval) and `get_ticket` (P02) into `SpecialistTools`. Tests: `SearchHandbook("vpn")` returns non-empty top chunk; `GetTicket` round-trip against `InMemoryTicketStore`.
+- [x] **Step 2: Tool functions** — port `search_handbook` (P04 retrieval) and `get_ticket` (P02) into `SpecialistTools`. Tests: `SearchHandbook("vpn")` returns non-empty top chunk; `GetTicket` round-trip against `InMemoryTicketStore`.
 
-- [ ] **Step 3: Run tests, verify PASS** — `dotnet test`
+- [x] **Step 3: Run tests, verify PASS** — `dotnet test`
 
-- [ ] **Step 4: Specialist factories** — shared `IChatClient` (one `ChatClientBuilder(...).UseFunctionInvocation()` per specialist is fine), distinct instructions, e.g. NetworkSpecialist: `"You are HelpDeskHQ's network specialist. Diagnose connectivity, Wi-Fi, VPN issues using the handbook. Answer concisely with steps."` Hardware/Software analogues with their tools.
+- [x] **Step 4: Specialist factories** — shared `IChatClient` (one `ChatClientBuilder(...).UseFunctionInvocation()` per specialist is fine), distinct instructions, e.g. NetworkSpecialist: `"You are HelpDeskHQ's network specialist. Diagnose connectivity, Wi-Fi, VPN issues using the handbook. Answer concisely with steps."` Hardware/Software analogues with their tools.
 
-- [ ] **Step 5: Smoke run** — direct `RunAsync` on each specialist with its scenario prompt; expect grounded answers.
+- [x] **Step 5: Smoke run** — direct `RunAsync` on each specialist with its scenario prompt; expect grounded answers.
 
-- [ ] **Step 6: Commit** — `feat(p06): three specialist agents`
+- [x] **Step 6: Commit** — `feat(p06): three specialist agents`
 
 ### Task 2: Agents-as-tools triage
 
@@ -61,9 +61,9 @@ dotnet add tests/P06.TriageComposition.Tests reference src/P06.TriageComposition
 **Interfaces:**
 - Produces: `TriageAsTools.Create() -> ChatClientAgent`
 
-- [ ] **Step 1: Find exact extension** — doc section "Using an agent as a function tool" at https://learn.microsoft.com/en-us/agent-framework/agents/tools. Best guess (verify!): `specialist.AsAITool(name: ..., description: ...)`. Write the exact method from the doc into NOTES.md before coding.
+- [x] **Step 1: Find exact extension** — doc section "Using an agent as a function tool" at https://learn.microsoft.com/en-us/agent-framework/agents/tools. Best guess (verify!): `specialist.AsAITool(name: ..., description: ...)`. Write the exact method from the doc into NOTES.md before coding.
 
-- [ ] **Step 2: Compose triage agent**
+- [x] **Step 2: Compose triage agent**
 
 ```csharp
 // sketch — replace AsAITool with verified name
@@ -89,11 +89,11 @@ var triage = new ChatClientAgent(
 ```
 (Tools member placement — verify against P02/agents/tools doc sample.)
 
-- [ ] **Step 3: Run all three scenarios** — Wi-Fi / Excel / laptop prompts. Expect answers prefixed by correct specialist.
+- [x] **Step 3: Run all three scenarios** — Wi-Fi / Excel / laptop prompts. Expect answers prefixed by correct specialist.
 
-- [ ] **Step 4: Trace check** — Aspire: expect nested spans (triage model call → specialist agent run → specialist model call → tool). Record which specialist tool was invoked per scenario.
+- [x] **Step 4: Trace check** — Aspire: expect nested spans (triage model call → specialist agent run → specialist model call → tool). Record which specialist tool was invoked per scenario.
 
-- [ ] **Step 5: Commit** — `feat(p06): triage via agents-as-tools`
+- [x] **Step 5: Commit** — `feat(p06): triage via agents-as-tools`
 
 ### Task 3: Handoff orchestration
 
@@ -104,9 +104,9 @@ var triage = new ChatClientAgent(
 **Interfaces:**
 - Produces: `TriageHandoff.Create()` returning runnable workflow (exact type from doc)
 
-- [ ] **Step 1: Verify orchestration API** — fetch https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff. Record in NOTES.md: NuGet package name (best guess: `Microsoft.Agents.AI.Orchestration`), builder class (best guess: `HandoffWorkflowBuilder` or `OrchestrationBuilder`), run method.
+- [x] **Step 1: Verify orchestration API** — fetch https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff. Record in NOTES.md: NuGet package name (best guess: `Microsoft.Agents.AI.Orchestration`), builder class (best guess: `HandoffWorkflowBuilder` or `OrchestrationBuilder`), run method.
 
-- [ ] **Step 2: Build handoff workflow** — sketch (replace with verified types):
+- [x] **Step 2: Build handoff workflow** — sketch (replace with verified types):
 
 ```csharp
 var workflow = new HandoffWorkflowBuilder()            // verify name
@@ -118,17 +118,17 @@ var workflow = new HandoffWorkflowBuilder()            // verify name
 ```
 Handoff instructions: each agent gets a handoff tool per target ("transfer to X when the problem is Y").
 
-- [ ] **Step 3: Run same three scenarios** — interactive console loop per handoff doc (handoff returns control to user between agents).
+- [x] **Step 3: Run same three scenarios** — interactive console loop per handoff doc (handoff returns control to user between agents).
 
-- [ ] **Step 4: Trace check** — compare spans vs Phase 1: who holds conversation, how many model calls.
+- [x] **Step 4: Trace check** — compare spans vs Phase 1: who holds conversation, how many model calls.
 
-- [ ] **Step 5: Commit** — `feat(p06): triage via handoff orchestration`
+- [x] **Step 5: Commit** — `feat(p06): triage via handoff orchestration`
 
 ### Task 4: Comparison + notes
 
 **Files:**
 - Create: `docs/projects/06-triage-composition/NOTES.md`
 
-- [ ] **Step 1: NOTES.md table** — per scenario, per phase: model-call count (from spans), final-answer latency feel, routing correctness, context sharing (does specialist see full conversation?), failure mode observed.
-- [ ] **Step 2: Verdict** — 3 bullets: when agents-as-tools wins, when handoff wins, what surprised you.
-- [ ] **Step 3: Commit** — `docs(p06): pattern comparison notes`
+- [x] **Step 1: NOTES.md table** — per scenario, per phase: model-call count (from spans), final-answer latency feel, routing correctness, context sharing (does specialist see full conversation?), failure mode observed.
+- [x] **Step 2: Verdict** — 3 bullets: when agents-as-tools wins, when handoff wins, what surprised you.
+- [x] **Step 3: Commit** — `docs(p06): pattern comparison notes`

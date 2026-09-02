@@ -31,7 +31,7 @@
   - `record ApprovalDecision(bool Approved, string Note);`
   - `static class ApprovalPolicy { bool NeedsEscalation(TicketPriority p); string ResolutionNote(TicketContext ctx, ApprovalDecision d); string RejectionNote(ApprovalDecision d); }`
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new console -n P07.ResolutionWorkflow -o src/P07.ResolutionWorkflow -f net10.0
@@ -44,7 +44,7 @@ dotnet sln add tests/P07.ResolutionWorkflow.Tests
 dotnet add tests/P07.ResolutionWorkflow.Tests reference src/P07.ResolutionWorkflow src/MafDemo.Core
 ```
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
 
 ```csharp
 public class ApprovalPolicyTests
@@ -68,23 +68,23 @@ public class ApprovalPolicyTests
 }
 ```
 
-- [ ] **Step 3: Run, verify FAIL** — `dotnet test`
+- [x] **Step 3: Run, verify FAIL** — `dotnet test`
 
-- [ ] **Step 4: Implement records + policy** — trivial pure functions.
+- [x] **Step 4: Implement records + policy** — trivial pure functions.
 
-- [ ] **Step 5: Run, verify PASS. Commit** — `feat(p07): ticket context + approval policy`
+- [x] **Step 5: Run, verify PASS. Commit** — `feat(p07): ticket context + approval policy`
 
 ### Task 2: Executors (graph nodes)
 
 **Files:**
-- Create: `src/P07.ResolutionWorkflow/Executors/TriageExecutor.cs`, `DiagnosticExecutor.cs`, `EscalationExecutor.cs`, `ResolutionExecutor.cs`, `ApprovalRequestExecutor.cs`
+- Create: `src/P07.ResolutionWorkflow/Executors/ApprovalExecutor.cs`, `StageExecutors.cs` (the five planned executor files consolidated into these two during implementation — see NOTES)
 - Modify: `src/P07.ResolutionWorkflow/Program.cs`
 
 **Interfaces:**
 - Consumes: `TicketContext`, specialists/agents from P06 (`agent.RunAsync(text)` inside `HandleAsync`), `ITicketStore`
 - Produces: `Workflow` graph wired in `Program.MainWorkflow()` (used by Tasks 3–4)
 
-- [ ] **Step 1: Agent-backed executors** — wrap P06 specialist triage + a diagnostic prompt:
+- [x] **Step 1: Agent-backed executors** — wrap P06 specialist triage + a diagnostic prompt:
 
 ```csharp
 internal sealed class TriageExecutor(AIAgent triageAgent) : Executor<TicketContext>("Triage")
@@ -99,7 +99,7 @@ internal sealed class TriageExecutor(AIAgent triageAgent) : Executor<TicketConte
 ```
 (`reply.Text` member + `RunAsync` overload — verify against P01/P06 code.) `DiagnosticExecutor` similar: agent proposes fix, fills `ProposedFix`.
 
-- [ ] **Step 2: `ApprovalRequestExecutor`** — routes by priority and sends the request:
+- [x] **Step 2: `ApprovalRequestExecutor`** — routes by priority and sends the request:
 
 ```csharp
 internal sealed class ApprovalRequestExecutor(RequestPort<FixApprovalRequest, ApprovalDecision> port) : Executor<TicketContext>("FixApproval")
@@ -115,9 +115,9 @@ internal sealed class ApprovalRequestExecutor(RequestPort<FixApprovalRequest, Ap
 ```
 Doc pattern note: the HITL sample wires `WorkflowBuilder(numberRequestPort)` — port receives requests FROM an executor via a message edge (`AddEdge(judgeExecutor, numberRequestPort)`). Follow the doc's edge-to-port wiring, not an invented `SendRequestAsync`.
 
-- [ ] **Step 3: `EscalationExecutor`** — agent node: "You are the escalation engineer. Refine this fix for a Critical incident: ..." → updated `ProposedFix`, then sends to the port edge.
+- [x] **Step 3: `EscalationExecutor`** — agent node: "You are the escalation engineer. Refine this fix for a Critical incident: ..." → updated `ProposedFix`, then sends to the port edge.
 
-- [ ] **Step 4: `ResolutionExecutor`** — consumes `ApprovalDecision` responses (per doc, executor handling the response re-receives original request — model your response handler as `Executor<FixApprovalRequest>` variant or follow doc's `JudgeExecutor` re-entry pattern), then:
+- [x] **Step 4: `ResolutionExecutor`** — consumes `ApprovalDecision` responses (per doc, executor handling the response re-receives original request — model your response handler as `Executor<FixApprovalRequest>` variant or follow doc's `JudgeExecutor` re-entry pattern), then:
 
 ```csharp
 if (decision.Approved)
@@ -127,7 +127,7 @@ else
 await context.YieldOutputAsync($"ticket {ctx.TicketId}: {(decision.Approved ? "resolved" : "rejected — in progress")}", ct);
 ```
 
-- [ ] **Step 5: Wire graph in Program**
+- [x] **Step 5: Wire graph in Program**
 
 ```csharp
 var port = RequestPort.Create<FixApprovalRequest, ApprovalDecision>("FixApproval");
@@ -139,14 +139,14 @@ var workflow = new WorkflowBuilder(port)
 ```
 Graph shape follows the doc sample's edge-to-port topology; adjust to actual sample.
 
-- [ ] **Step 6: Compile check** — `dotnet build`. Commit — `feat(p07): workflow executors + graph`
+- [x] **Step 6: Compile check** — `dotnet build`. Commit — `feat(p07): workflow executors + graph`
 
 ### Task 3: HITL event loop + batch scenario
 
 **Files:**
 - Modify: `src/P07.ResolutionWorkflow/Program.cs`
 
-- [ ] **Step 1: Run loop** — verified pattern:
+- [x] **Step 1: Run loop** — verified pattern:
 
 ```csharp
 await using StreamingRun handle = await InProcessExecution.RunStreamingAsync(workflow, ticketCtx);
@@ -170,11 +170,11 @@ await foreach (WorkflowEvent evt in handle.WatchStreamAsync())
 ```
 (`Request.Data` member — verify against doc sample.)
 
-- [ ] **Step 2: Batch scenario** — seed 3 tickets (Wi-Fi High, Excel Normal, laptop-encrypted Critical), run all three through the workflow in one session. Approve 2, reject 1.
+- [x] **Step 2: Batch scenario** — seed 3 tickets (Wi-Fi High, Excel Normal, laptop-encrypted Critical), run all three through the workflow in one session. Approve 2, reject 1.
 
-- [ ] **Step 3: Assert outcomes** — after run: two tickets `Resolved` with notes, one `InProgress` with rejection note. Print store state; verify Critical trace shows Escalation span.
+- [x] **Step 3: Assert outcomes** — after run: two tickets `Resolved` with notes, one `InProgress` with rejection note. Print store state; verify Critical trace shows Escalation span.
 
-- [ ] **Step 4: Commit** — `feat(p07): hitl approval loop + batch scenario`
+- [x] **Step 4: Commit** — `feat(p07): hitl approval loop + batch scenario`
 
 ### Task 4: Checkpoint kill-and-resume
 
@@ -182,20 +182,20 @@ await foreach (WorkflowEvent evt in handle.WatchStreamAsync())
 - Modify: `src/P07.ResolutionWorkflow/Program.cs`
 - Create: `docs/projects/07-resolution-workflow/NOTES.md` (checkpoint API findings)
 
-- [ ] **Step 1: Research checkpoint API** — fetch https://learn.microsoft.com/en-us/agent-framework/workflows/checkpoints. Record in NOTES.md: checkpoint save/restore/`checkpoint_id`+responses resume API for C# in-process runs.
+- [x] **Step 1: Research checkpoint API** — fetch https://learn.microsoft.com/en-us/agent-framework/workflows/checkpoints. Record in NOTES.md: checkpoint save/restore/`checkpoint_id`+responses resume API for C# in-process runs.
 
-- [ ] **Step 2: Implement checkpoint at approval pause** — save checkpoint when the `RequestInfoEvent` is emitted, before answering; Ctrl-C kill without answering.
+- [x] **Step 2: Implement checkpoint at approval pause** — save checkpoint when the `RequestInfoEvent` is emitted, before answering; Ctrl-C kill without answering.
 
-- [ ] **Step 3: Restore path** — restart process, restore from checkpoint, confirm pending request re-emitted (doc: pending requests saved in checkpoint state), answer it, workflow completes; ticket state correct.
+- [x] **Step 3: Restore path** — restart process, restore from checkpoint, confirm pending request re-emitted (doc: pending requests saved in checkpoint state), answer it, workflow completes; ticket state correct.
 
-- [ ] **Step 4: If in-process checkpointing is not available for this topology** — fallback POC: serialize `TicketContext` batch + which stage each is in to `checkpoint.json`, restart re-drives from that stage; note in NOTES.md that true durable execution arrives in P09.
+- [x] **Step 4: If in-process checkpointing is not available for this topology** — fallback POC: serialize `TicketContext` batch + which stage each is in to `checkpoint.json`, restart re-drives from that stage; note in NOTES.md that true durable execution arrives in P09.
 
-- [ ] **Step 5: Commit** — `feat(p07): checkpoint kill-and-resume`
+- [x] **Step 5: Commit** — `feat(p07): checkpoint kill-and-resume`
 
 ### Task 5: NOTES
 
 **Files:**
 - Modify: `docs/projects/07-resolution-workflow/NOTES.md` (started in Task 4 — append, don't overwrite)
 
-- [ ] **Step 1: NOTES.md** — bullets: graph vs orchestration (vs P06 handoff), where HITL state lives, checkpoint mechanism used, failure modes.
-- [ ] **Step 2: Commit** — `docs(p07): learning notes`
+- [x] **Step 1: NOTES.md** — bullets: graph vs orchestration (vs P06 handoff), where HITL state lives, checkpoint mechanism used, failure modes.
+- [x] **Step 2: Commit** — `docs(p07): learning notes`

@@ -10,7 +10,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 # The handbook corpus must sit at <approot>/docs/corpus so the startup
-# walk-up search finds it (AgentsSetup.FindCorpusDirectory). The agents/
+# walk-up search finds it (MafDemo.Core HandbookCorpus.Locate). The agents/
 # YAML is copied explicitly — it is loaded from BaseDirectory/agents at
 # runtime and publish does not always carry the None-copy items.
 COPY --from=build /src/docs/corpus /app/docs/corpus

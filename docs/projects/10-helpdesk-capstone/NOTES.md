@@ -23,8 +23,8 @@ and a Docker Compose stack.
   MafDemo.Core.Tests and is reused by the live suite — evals are now plain
   library code, not project plumbing.
 - **Compose**: multi-stage Dockerfile with the handbook corpus copied to
-  `<approot>/docs/corpus` satisfies the walk-up `FindCorpusDirectory` (no code
-  change needed for containers); `host.docker.internal:host-gateway` reaches
+  `<approot>/docs/corpus` satisfies the walk-up `HandbookCorpus.Locate()` in
+  `MafDemo.Core` (no code change needed for containers); `host.docker.internal:host-gateway` reaches
   host Ollama on Linux and macOS.
 
 ## Doc-vs-reality divergences

@@ -34,7 +34,7 @@
   - `interface ITicketStore { Task<Ticket> CreateAsync(string title, string description, TicketPriority priority); Task<Ticket?> GetAsync(Guid id); Task<IReadOnlyList<Ticket>> ListAsync(); Task<Ticket?> UpdateStatusAsync(Guid id, TicketStatus status); Task AddNoteAsync(Guid id, string note); }`
   - `class InMemoryTicketStore : ITicketStore`
 
-- [ ] **Step 1: Scaffold**
+- [x] **Step 1: Scaffold**
 
 ```bash
 dotnet new sln -n MafDemo
@@ -44,7 +44,7 @@ dotnet sln add src/MafDemo.Core tests/MafDemo.Core.Tests
 dotnet add tests/MafDemo.Core.Tests reference src/MafDemo.Core
 ```
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
 
 ```csharp
 // tests/MafDemo.Core.Tests/InMemoryTicketStoreTests.cs
@@ -83,12 +83,12 @@ public class InMemoryTicketStoreTests
 }
 ```
 
-- [ ] **Step 3: Run tests, verify FAIL**
+- [x] **Step 3: Run tests, verify FAIL**
 
 Run: `dotnet test`
 Expected: compile error — types missing.
 
-- [ ] **Step 4: Implement Core**
+- [x] **Step 4: Implement Core**
 
 ```csharp
 // src/MafDemo.Core/Domain/Ticket.cs
@@ -114,9 +114,9 @@ public interface ITicketStore
 // src/MafDemo.Core/Stores/InMemoryTicketStore.cs — dictionary-backed, lock not needed (single-threaded demo); update via `ticket with { ... }`
 ```
 
-- [ ] **Step 5: Run tests, verify PASS** — `dotnet test`
+- [x] **Step 5: Run tests, verify PASS** — `dotnet test`
 
-- [ ] **Step 6: Commit** — `feat(core): ticket domain + in-memory store`
+- [x] **Step 6: Commit** — `feat(core): ticket domain + in-memory store`
 
 ### Task 2: Ollama client factory + FaqBot one-shot
 
@@ -128,7 +128,7 @@ public interface ITicketStore
 - Produces: `static class OllamaChat { public static IChatClient Create(string? model = null); }` — P02+ reuse pattern
 - Produces: `FaqBot` agent factory
 
-- [ ] **Step 1: Scaffold console project**
+- [x] **Step 1: Scaffold console project**
 
 ```bash
 dotnet new console -n P01.HelloAgent -o src/P01.HelloAgent -f net10.0
@@ -138,7 +138,7 @@ dotnet add src/P01.HelloAgent package OllamaSharp
 dotnet add src/P01.HelloAgent package Microsoft.Extensions.OpenTelemetry
 ```
 
-- [ ] **Step 2: Write `OllamaChat.cs`**
+- [x] **Step 2: Write `OllamaChat.cs`**
 
 ```csharp
 using Microsoft.Extensions.AI;
@@ -154,7 +154,7 @@ public static class OllamaChat
 }
 ```
 
-- [ ] **Step 3: Write `FaqBot.cs`** — class name check: cite https://learn.microsoft.com/en-us/agent-framework/get-started/your-first-agent and the .NET intro blog (`ChatClientAgent`):
+- [x] **Step 3: Write `FaqBot.cs`** — class name check: cite https://learn.microsoft.com/en-us/agent-framework/get-started/your-first-agent and the .NET intro blog (`ChatClientAgent`):
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -167,7 +167,7 @@ public static class FaqBot
 }
 ```
 
-- [ ] **Step 4: One-shot in `Program.cs`**
+- [x] **Step 4: One-shot in `Program.cs`**
 
 ```csharp
 var agent = FaqBot.Create("You are HelpDeskHQ's FAQ bot. Answer IT questions in one short paragraph.");
@@ -176,19 +176,19 @@ Console.WriteLine(result);
 ```
 (RunAsync return + await pattern: verify against doc sample; adjust if API is `agent.RunAsync(...)` returning task with `.Text`.)
 
-- [ ] **Step 5: Run**
+- [x] **Step 5: Run**
 
 Run: `dotnet run --project src/P01.HelloAgent`
 Expected: Wi-Fi answer paragraph. If Ollama connection refused: `ollama serve`, re-run.
 
-- [ ] **Step 6: Commit** — `feat(p01): faq bot one-shot over ollama`
+- [x] **Step 6: Commit** — `feat(p01): faq bot one-shot over ollama`
 
 ### Task 3: Streaming
 
 **Files:**
 - Modify: `src/P01.HelloAgent/Program.cs`
 
-- [ ] **Step 1: Add streaming path** — `RunStreamingAsync` (name from docs):
+- [x] **Step 1: Add streaming path** — `RunStreamingAsync` (name from docs):
 
 ```csharp
 await foreach (var update in agent.RunStreamingAsync("Explain how to reset my password in 3 steps."))
@@ -196,29 +196,29 @@ await foreach (var update in agent.RunStreamingAsync("Explain how to reset my pa
 ```
 (Exact update member: check doc sample — `.Text` or `ToString()`.)
 
-- [ ] **Step 2: Run** — tokens appear incrementally, not one dump.
+- [x] **Step 2: Run** — tokens appear incrementally, not one dump.
 
-- [ ] **Step 3: Commit** — `feat(p01): streaming responses`
+- [x] **Step 3: Commit** — `feat(p01): streaming responses`
 
 ### Task 4: OTel console traces
 
 **Files:**
 - Modify: `src/P01.HelloAgent/Program.cs`
-- Create: `src/P01.HelloAgent/Telemetry.cs`
+- Create: ~~`src/P01.HelloAgent/Telemetry.cs`~~ (OTel wiring shipped in `MafDemo.AgentCommon` instead — see P05 NOTES)
 
-- [ ] **Step 1: Wire OTel** — per MAF observability doc (https://learn.microsoft.com/en-us/agent-framework/agents/observability): `TraceProvider` + console exporter; add source name used by MAF (`Microsoft.Agents.AI*` — copy exact source name from doc).
+- [x] **Step 1: Wire OTel** — per MAF observability doc (https://learn.microsoft.com/en-us/agent-framework/agents/observability): `TraceProvider` + console exporter; add source name used by MAF (`Microsoft.Agents.AI*` — copy exact source name from doc).
 
-- [ ] **Step 2: Run** — expect span lines on stdout for the model call.
+- [x] **Step 2: Run** — expect span lines on stdout for the model call.
 
-- [ ] **Step 3: Commit** — `feat(p01): opentelemetry console traces`
+- [x] **Step 3: Commit** — `feat(p01): opentelemetry console traces`
 
 ### Task 5: Instructions experiment + notes
 
 **Files:**
 - Create: `docs/projects/01-hello-agent/NOTES.md`
 
-- [ ] **Step 1: Experiment** — run same prompt with `"Answer only in bullet points, max 3."` vs default instructions. Record both outputs in NOTES.md.
+- [x] **Step 1: Experiment** — run same prompt with `"Answer only in bullet points, max 3."` vs default instructions. Record both outputs in NOTES.md.
 
-- [ ] **Step 2: NOTES.md** — 3 bullets: what the agent loop did, what the trace showed, what instructions changed.
+- [x] **Step 2: NOTES.md** — 3 bullets: what the agent loop did, what the trace showed, what instructions changed.
 
-- [ ] **Step 3: Commit** — `docs(p01): learning notes`
+- [x] **Step 3: Commit** — `docs(p01): learning notes`
