@@ -63,6 +63,25 @@ flowchart LR
 | 14 | `P14.SemanticMemory` | `ChatHistoryMemoryProvider` + custom `AIContextProvider` + MEVD vectors | Two memory shapes side by side: MAF's turn memory (cross-session, process-local) beside a durable fact store — a tiny extractor agent distills each turn to third-person facts, dedupes at cosine ≥ 0.9, persists to JSON, and a fresh process recalls them (`scripts/demo14.sh`) |
 | 15 | `P15.OrchestratorHost` | graph workflows across remote A2A agents | One local `WorkflowBuilder` graph with two remote hops (DiagnosisAgent :5200, P09's InventoryAgent :5199) — a conditional edge on the diagnosis text skips the inventory hop, agent nodes are `ChatProtocol` executors (`List<ChatMessage>` + `TurnToken`, not `AgentResponse`), and killing the inventory service fails visibly at the hop as a `WorkflowErrorEvent`, never at startup (`scripts/demo15-failure.sh`) |
 
+## Backlog — deliberately not built
+
+The ladder is frozen at 15. These are verified-but-unbuilt ideas, kept here
+as the visible not-built list. Each names the API or gap it would close; all
+APIs were confirmed against the installed packages during the P11–P15 gap
+scan.
+
+| Item | Closes what | Where it would land |
+|---|---|---|
+| HandbookCorpus consolidation | 4 hand-rolled handbook loaders across projects drift independently | `MafDemo.Core` single loader, projects consume it |
+| Static demo page | No viewer-friendly UI; approval flow is curl-only | 1-hour HTML page over P10's chat endpoint — outside the ladder, no project |
+| MEAI Evaluation port | Eval harness is hand-rolled in `MafDemo.Core` | Port to `Microsoft.Extensions.AI.Evaluation` 10.9.0 `DiskBasedReportingConfiguration` (response-cached evals) |
+| Multi-model routing | Single fixed model per project | MEAI `SemanticRoutingChatClient` / `OrderedFailoverChatClient` / `ConfigureOptionsChatClient`; MAF `RoutePersistingRoutingChatClient` |
+| Cross-process trace propagation | P15 NOTES claims "three processes in one trace" — spans are per-process today; no W3C traceparent propagation across the A2A hops | P15 orchestrator + services: propagate `Activity.Current` context into outbound A2A calls |
+| Endpoint hardening | P13/P10 endpoints are unauthenticated, unthrottled demo surfaces | API-key middleware + rate limit on the P13 SSE endpoint |
+| Compaction | Long sessions grow unbounded | MAF `Compaction.*` APIs on the capstone host |
+| Vision | All text; models support it | Image input through P10's chat path |
+| Declarative YAML workflows | P10 has declarative agents, not declarative graphs | Deferred at MAF 1.19.0 — feature ships in 1.20.0; revisit on package bump |
+
 ## Run
 
 Prereqs: .NET 10 SDK, [Ollama](https://ollama.com) with the models from
