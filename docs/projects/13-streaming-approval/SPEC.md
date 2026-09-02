@@ -1,5 +1,7 @@
 # SPEC — P13: StreamingApproval (streaming chat + mid-stream tool approval over HTTP)
 
+**Tier:** Advanced · **Estimate:** 5–6 hours · **Depends on:** P05, P10
+
 ## Story
 
 Stream an agent's answer over SSE from a self-hosted HTTP endpoint; when the

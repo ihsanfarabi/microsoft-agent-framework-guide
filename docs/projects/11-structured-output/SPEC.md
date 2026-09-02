@@ -1,5 +1,7 @@
 # SPEC — P11: StructuredOutput
 
+**Tier:** Advanced · **Estimate:** 4–5 hours · **Depends on:** P01
+
 Typed JSON responses from a MAF agent on Ollama — honestly framed around the
 Ollama Cloud schema limitation.
 

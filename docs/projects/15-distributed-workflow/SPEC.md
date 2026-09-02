@@ -1,5 +1,7 @@
 # SPEC — P15: DistributedWorkflow (MAF graph workflow spanning processes via A2A)
 
+**Tier:** Advanced · **Estimate:** 6–8 hours · **Depends on:** P07, P09
+
 ## Story
 
 One deterministic `WorkflowBuilder` graph on a local host whose middle nodes

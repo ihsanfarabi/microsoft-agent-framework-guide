@@ -1,5 +1,7 @@
 # SPEC — P14: SemanticMemory (agent memory across sessions)
 
+**Tier:** Advanced · **Estimate:** 5–6 hours · **Depends on:** P04
+
 ## Story
 
 "Remember: I prefer email over phone." Restart. "How should I reach you?" —

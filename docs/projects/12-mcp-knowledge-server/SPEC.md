@@ -1,5 +1,7 @@
 # SPEC — P12: McpKnowledgeServer (write our own MCP server in C#)
 
+**Tier:** Advanced · **Estimate:** 4–5 hours · **Depends on:** P02
+
 Closes the skipped P02 stretch goal: a custom C# MCP *server* exposing
 `search_knowledge` over the MafCorp handbook, consumed by the P02 client.
 
