@@ -47,6 +47,26 @@ public class FileTicketStoreTests
     }
 
     [Fact]
+    public async Task Concurrent_create_and_list_do_not_throw_or_lose_tickets()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        var store = new FileTicketStore(path);
+
+        // Two racing writers on one singleton store: both must succeed, and a
+        // concurrent reader must never observe a torn Dictionary (which throws
+        // or, under a shared tmp file, IOException from File.Move).
+        var tasks = Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => store.CreateAsync("t", "d", TicketPriority.Normal)));
+        var created = await Task.WhenAll(tasks);
+        var listed = await store.ListAsync();
+
+        Assert.Equal(8, listed.Count);                        // nothing lost
+        Assert.Equal(8, listed.Select(t => t.Id).Distinct().Count()); // no id collisions
+        Assert.True(File.Exists(path));
+        File.Delete(path);
+    }
+
+    [Fact]
     public async Task Duplicate_id_file_starts_empty_instead_of_throwing()
     {
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");

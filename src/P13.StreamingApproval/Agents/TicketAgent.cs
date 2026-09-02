@@ -174,12 +174,15 @@ public interface IDeletableTicketStore : ITicketStore
 /// own file and hidden from <see cref="GetAsync"/>/<see cref="ListAsync"/>;
 /// the inner store's file and cache are never touched behind its back, so a
 /// later note/status write through the inner store still sees a consistent
-/// (filtered) view. Same corrupt-file tolerance as the inner store.
+/// (filtered) view. Same corrupt-file tolerance as the inner store. Safe for
+/// concurrent callers: the inner store locks itself; the tombstone set is
+/// guarded by this class's own gate.
 /// </summary>
 public sealed class DeletableTicketStore : IDeletableTicketStore
 {
     private readonly FileTicketStore _inner;
     private readonly string _deletedPath;
+    private readonly object _gate = new();
     private readonly HashSet<Guid> _deleted;
 
     public DeletableTicketStore(string ticketsPath, string deletedPath)
@@ -215,17 +218,36 @@ public sealed class DeletableTicketStore : IDeletableTicketStore
     /// never lose ticket data) and hidden from reads. Idempotent.</summary>
     public async Task<bool> DeleteAsync(Guid id)
     {
-        if (await _inner.GetAsync(id) is null || _deleted.Contains(id)) return false;
-        _deleted.Add(id);
-        SaveDeleted();
+        if (await _inner.GetAsync(id) is null) return false;
+        lock (_gate)
+        {
+            if (_deleted.Contains(id)) return false;
+            _deleted.Add(id);
+            SaveDeleted();
+        }
         return true;
     }
 
-    public Task<Ticket?> GetAsync(Guid id) =>
-        Task.FromResult(_deleted.Contains(id) ? null : _inner.GetAsync(id).GetAwaiter().GetResult());
+    public async Task<Ticket?> GetAsync(Guid id)
+    {
+        if (await _inner.GetAsync(id) is null) return null;
+        lock (_gate)
+        {
+            if (_deleted.Contains(id)) return null;
+        }
+        return await _inner.GetAsync(id);
+    }
 
-    public async Task<IReadOnlyList<Ticket>> ListAsync() =>
-        (await _inner.ListAsync()).Where(t => !_deleted.Contains(t.Id)).ToList();
+    public async Task<IReadOnlyList<Ticket>> ListAsync()
+    {
+        Guid[] deletedSnapshot;
+        lock (_gate)
+        {
+            deletedSnapshot = [.. _deleted];
+        }
+        var deletedSet = deletedSnapshot.ToHashSet();
+        return (await _inner.ListAsync()).Where(t => !deletedSet.Contains(t.Id)).ToList();
+    }
 
     public Task<Ticket> CreateAsync(string title, string description, TicketPriority priority) =>
         _inner.CreateAsync(title, description, priority);
