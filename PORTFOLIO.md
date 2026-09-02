@@ -72,7 +72,7 @@ scan.
 
 | Item | Closes what | Where it would land |
 |---|---|---|
-| HandbookCorpus consolidation | 4 hand-rolled handbook loaders across projects drift independently | `MafDemo.Core` single loader, projects consume it |
+| ~~HandbookCorpus consolidation~~ | 4 hand-rolled handbook loaders across projects drift independently | **Done** — `HandbookCorpus.Locate()` in `MafDemo.Core`, 7 copies collapsed (P04, P06, P07, P08, P09, P10, P12) |
 | Static demo page | No viewer-friendly UI; approval flow is curl-only | 1-hour HTML page over P10's chat endpoint — outside the ladder, no project |
 | MEAI Evaluation port | Eval harness is hand-rolled in `MafDemo.Core` | Port to `Microsoft.Extensions.AI.Evaluation` 10.9.0 `DiskBasedReportingConfiguration` (response-cached evals) |
 | Multi-model routing | Single fixed model per project | MEAI `SemanticRoutingChatClient` / `OrderedFailoverChatClient` / `ConfigureOptionsChatClient`; MAF `RoutePersistingRoutingChatClient` |
