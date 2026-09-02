@@ -77,19 +77,46 @@ app.MapPost("/conversations/{id}/messages",
 
         http.Response.ContentType = "text/event-stream";
         http.Response.Headers.CacheControl = "no-cache";
-        await StreamSseFramesAsync(http.Response,
-            SseWriter.EnumerateFrames(
-                agent.RunStreamingAsync(new ChatMessage(ChatRole.User, body.Text), session,
-                    cancellationToken: ct),
-                id, session, approvals, ct),
-            ct);
-        // P08's checkpoint discipline: the moment the stream ends, the
-        // session — history and any parked approval state — is serialized to
-        // disk (atomic temp-file move), so a later message (or a process
-        // restart) continues the conversation instead of starting over.
-        // Failures are swallowed with a console line (P08's fail-soft rule):
-        // a lost checkpoint must never crash the response after its work.
-        await sessions.CheckpointAsync(id, session, agent, ct);
+        try
+        {
+            await StreamSseFramesAsync(http.Response,
+                SseWriter.EnumerateFrames(
+                    agent.RunStreamingAsync(new ChatMessage(ChatRole.User, body.Text), session,
+                        cancellationToken: ct),
+                    id, session, approvals, ct),
+                ct);
+            // P08's checkpoint discipline: the moment the stream ends, the
+            // session — history and any parked approval state — is serialized to
+            // disk (atomic temp-file move), so a later message (or a process
+            // restart) continues the conversation instead of starting over.
+            // Failures are swallowed with a console line (P08's fail-soft rule):
+            // a lost checkpoint must never crash the response after its work.
+            await sessions.CheckpointAsync(id, session, agent, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Client disconnect or shutdown mid-run: nothing to deliver to — the
+            // checkpoint is deliberately skipped (the next successful run's
+            // checkpoint supersedes the stale file).
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Model down, tool crash, anything else mid-stream: the response has
+            // already started 200 text/event-stream, so the only deliverable
+            // failure shape is an SSE error frame — never a dropped connection
+            // (the endpoint's own contract: every terminal outcome is an error
+            // frame). The checkpoint is deliberately NOT taken when the run
+            // threw: disk keeps the last known-good turn, same rule as
+            // /approvals.
+            await WriteSseErrorAsync(http.Response, new
+            {
+                error = "run-failed",
+                detail = ex.Message,
+                recovery = "re-send the message to retry the turn",
+            }, ct);
+        }
+
         return Results.Empty;
     });
 

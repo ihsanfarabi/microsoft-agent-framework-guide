@@ -564,6 +564,26 @@ public class SseContractTests
     }
 
     [Fact]
+    public async Task Message_endpoint_model_failure_ends_as_sse_error_frame()
+    {
+        // Model down mid-response: the stream has already started 200, so a 500
+        // is impossible to deliver — the contract says the failure must arrive
+        // as an `event: error` frame instead of a silently dropped connection.
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(b => b.ConfigureServices(services =>
+                services.AddSingleton<IChatClient>(new ThrowingClient())));
+        var client = factory.CreateClient();
+
+        var conversationId = $"err-{Guid.NewGuid():N}";
+        using var content = new StringContent("""{"text":"anything"}""", Encoding.UTF8, "application/json");
+        using var response = await client.PostAsync($"/conversations/{conversationId}/messages", content);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("event: error", body);
+        Assert.Contains("run-failed", body);
+    }
+
+    [Fact]
     public async Task Conversation_gate_serializes_concurrent_runs()
     {
         using var factory = new WebApplicationFactory<Program>()
@@ -716,6 +736,23 @@ public class SseContractTests
         return writer.ToString();
     }
 
+}
+
+/// <summary>Chat client whose streaming call always fails — the model-down
+/// shape (HttpRequestException) reaching the SSE endpoint mid-response.</summary>
+public sealed class ThrowingClient : IChatClient
+{
+    public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null, CancellationToken cancellationToken = default)
+        => throw new HttpRequestException("connection refused (fake)");
+
+    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => throw new HttpRequestException("connection refused (fake)");
+
+    public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    public void Dispose() { }
 }
 
 /// <summary>
