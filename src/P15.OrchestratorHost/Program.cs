@@ -131,6 +131,7 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
     bool diagnosisHit = false;
     bool inventoryHit = false;
     WorkflowErrorEvent? errorEvent = null;
+    ExecutorFailedEvent? executorFailure = null;
     await foreach (WorkflowEvent evt in handle.WatchStreamAsync())
     {
         switch (evt)
@@ -157,6 +158,12 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
                 Console.Error.WriteLine($"[workflow error] {error.Exception}");
                 break;
             case ExecutorFailedEvent failure:
+                // A sub-executor failure the engine surfaces per-executor rather
+                // than as a whole-run WorkflowErrorEvent. Same PROPAGATE contract
+                // as below: promoted to a failed run, never printed-and-swallowed
+                // — otherwise a dead remote hop can print the route summary and
+                // exit 0. (1.19.0 pairs ExecutorId with the failing Exception.)
+                executorFailure = failure;
                 Console.Error.WriteLine($"[executor failed: {failure.ExecutorId}] {failure.Data}");
                 break;
         }
@@ -183,6 +190,16 @@ static async Task RunScenarioAsync(AIAgent diagnosis, AIAgent inventory, string 
         Exception original = errorEvent.Exception
             ?? new InvalidOperationException("the workflow reported an error without an exception");
         throw new WorkflowFailedException(failingHop, original);
+    }
+
+    if (executorFailure is not null)
+    {
+        // The per-executor sibling of the WorkflowErrorEvent branch above: a
+        // failure surfaced this way must end the run non-zero too, with the
+        // executor id named in the failure text.
+        throw new WorkflowFailedException(
+            $"executor {executorFailure.ExecutorId} (per-executor failure event)",
+            executorFailure.Data);
     }
 
     // Route summary derived from what actually ran (no condition side
