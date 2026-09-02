@@ -6,14 +6,11 @@
 helpdesk assistant built on Microsoft Agent Framework (MAF) .NET.
 
 - **Visitor tour / architecture** → [`PORTFOLIO.md`](PORTFOLIO.md)
-- Per-project spec + plan + field notes: `docs/projects/NN-name/`
 
 All 15 implemented and verified: 111 unit tests green, the capstone compose
 stack serves a grounded OpenAI-compatible chat endpoint, an A2A agent endpoint,
 and OTLP traces into the Aspire dashboard, and one workflow graph spans two
 remote A2A agent services with a conditional edge skipping a dead hop.
-
-Design doc: `docs/superpowers/specs/2026-08-30-maf-csharp-curriculum-design.md`.
 
 ## Stack
 
@@ -64,16 +61,9 @@ ollama serve                      # ensure daemon on localhost:11434
 dotnet --version                  # .NET 10
 ```
 
-## Workflow per project
-
-1. Read SPEC.md
-2. Execute PLAN.md task by task (checkboxes)
-3. Each task: code, verify, commit (`rtk git ...`)
-4. API names come from cited doc pages in each task — docs win over plan code
-
 ## Field notes worth reading
 
-Each project ends with `NOTES.md` recording what the MAF 1.19.0 prerelease
+Per-project notes record what the MAF 1.19.0 prerelease
 docs say vs what actually happens. Highlights:
 
 - `ChatClientPromptAgentFactory` ships in `Microsoft.Agents.AI`, not
@@ -99,4 +89,3 @@ docs say vs what actually happens. Highlights:
   non-generic run + manual deserialize (P11)
 - The MCP C# SDK snake_cases tool names on the wire: the C# method surfaces
   as `search_knowledge`, matching the SDK's default, not the method name (P12)
-- Full index: `docs/projects/*/NOTES.md`

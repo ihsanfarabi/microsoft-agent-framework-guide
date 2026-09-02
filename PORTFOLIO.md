@@ -5,7 +5,7 @@
 Fifteen projects that walk the Microsoft Agent Framework (MAF) from a one-file
 chatbot to a durable multi-agent workflow — all on a local Ollama model, all
 runnable end to end. Built against the 1.19.0 prerelease line; API
-divergences from the docs are recorded per project in `docs/projects/*/NOTES.md`.
+divergences from the docs are recorded in the field notes below.
 
 ## Architecture
 
@@ -108,7 +108,7 @@ scripts/demo15-failure.sh                          # P15 kill-service demo (dead
 
 Durable resume (P09): start the dts-emulator container, run the host, interrupt
 it mid-approval, then `dotnet run -- resume` — pending work re-runs from
-scheduler state. Full walkthrough in `docs/projects/09-a2a-durable/NOTES.md`.
+scheduler state.
 
 ## Layout
 
@@ -117,8 +117,6 @@ scheduler state. Full walkthrough in `docs/projects/09-a2a-durable/NOTES.md`.
   `MafDemo.Core` holds shared
   handbook corpus loading, chunking, and the eval harness.
 - `docs/corpus` — the MafCorp handbook markdown the RAG projects index.
-- `docs/projects/<n>-*/PLAN.md` — per-project learning plan, `NOTES.md` —
-  findings and doc-vs-reality divergences.
 - `Definitions/` (inside P10) — declarative YAML agent definitions (`Agents/`
   would case-insensitively collide with the C# source folder on macOS).
 - `.github/workflows/ci.yml` — build + unit tests on push; eval suite gated to
