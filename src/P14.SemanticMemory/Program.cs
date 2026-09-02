@@ -106,7 +106,7 @@ switch (mode)
         await TellAsync(agent, factStore, factsPath, text.Length > 0 ? text : DefaultTell);
         break;
     case "recall":
-        await RecallAsync(agent, text.Length > 0 ? text : DefaultRecall);
+        await RecallAsync(agent, factStore, factsPath, text.Length > 0 ? text : DefaultRecall);
         break;
     case "repl":
         await ReplAsync(agent, factStore, factsPath);
@@ -150,13 +150,17 @@ static async Task TellAsync(ChatClientAgent agent, FactMemoryStore factStore, st
     Console.WriteLine($"(facts saved to {factsPath}; chat-history store contents are gone)");
 }
 
-static async Task RecallAsync(ChatClientAgent agent, string message)
+static async Task RecallAsync(ChatClientAgent agent, FactMemoryStore factStore, string factsPath, string message)
 {
     AgentSession session = await agent.CreateSessionAsync();
     Console.WriteLine("== session B (new) ==");
     Console.WriteLine($"user> {message}");
     var recall = await agent.RunAsync(message, session);
     Console.WriteLine($"bot> {recall.Text}");
+    // The provider extracts and stores facts during EVERY run — recall
+    // included. Persist them like every other mode (tell/repl/scripted
+    // already save), or facts learned in recall mode die with the process.
+    await factStore.SaveAsync(factsPath);
 }
 
 // Interactive chat over one session, plus two window into the durable fact
