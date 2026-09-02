@@ -57,9 +57,11 @@ public sealed class ChatClientFactExtractor : IFactExtractor
     }
 
     /// <summary>
-    /// Tolerant parser for the extractor's reply: strips markdown code fences
-    /// by taking the outermost <c>[...]</c> slice, then deserializes it as a
-    /// JSON string array. Malformed output, non-string items, or an empty
+    /// Tolerant parser for the extractor's reply: finds the innermost slice that
+    /// deserializes as a JSON string array — prose brackets ("Okay [1 fact]: …",
+    /// "… [end]") no longer corrupt the slice, because candidate <c>[ ... ]</c>
+    /// spans are tried from the most-plausible (last opener with the last closer)
+    /// outward until one parses. Malformed output, non-string items, or an empty
     /// response all yield an empty list — never an exception.
     /// </summary>
     public static IReadOnlyList<string> ParseFacts(string? text)
@@ -69,23 +71,35 @@ public sealed class ChatClientFactExtractor : IFactExtractor
             return [];
         }
 
-        var start = text.IndexOf('[');
-        var end = text.LastIndexOf(']');
-        if (start < 0 || end <= start)
+        for (var end = text.LastIndexOf(']'); end > 0; end = text.LastIndexOf(']', end - 1))
         {
-            return [];
+            for (var start = text.LastIndexOf('[', end); start >= 0;
+                 start = start > 0 ? text.LastIndexOf('[', start - 1) : -1)
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<string[]>(text[start..(end + 1)]);
+                    if (parsed is null)
+                    {
+                        return [];
+                    }
+
+                    var facts = parsed
+                        .Where(f => !string.IsNullOrWhiteSpace(f))
+                        .Select(f => f.Trim())
+                        .ToArray();
+                    if (facts.Length > 0)
+                    {
+                        return facts;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // This candidate span is not the array — try the next.
+                }
+            }
         }
 
-        try
-        {
-            var parsed = JsonSerializer.Deserialize<string[]>(text[start..(end + 1)]);
-            return parsed is null
-                ? []
-                : parsed.Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => f.Trim()).ToArray();
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
+        return [];
     }
 }

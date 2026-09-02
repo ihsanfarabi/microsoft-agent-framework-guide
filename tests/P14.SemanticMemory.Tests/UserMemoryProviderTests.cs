@@ -249,6 +249,36 @@ public class UserMemoryProviderTests
         Assert.Equal(["User prefers email over phone"], fenced);
     }
 
+    [Fact]
+    public void ParseFacts_ignores_brackets_in_prose_before_the_array()
+    {
+        var facts = ChatClientFactExtractor.ParseFacts("""Okay [1 fact]: ["User prefers Slack over email"]""");
+        var fact = Assert.Single(facts);
+        Assert.Equal("User prefers Slack over email", fact);
+    }
+
+    [Fact]
+    public void ParseFacts_ignores_bracketed_remark_after_the_array()
+    {
+        var facts = ChatClientFactExtractor.ParseFacts("""["User prefers email"] [end]""");
+        var fact = Assert.Single(facts);
+        Assert.Equal("User prefers email", fact);
+    }
+
+    [Fact]
+    public void ParseFacts_plain_array_still_parses()
+    {
+        var facts = ChatClientFactExtractor.ParseFacts("""["User works night shifts"]""");
+        Assert.Equal("User works night shifts", Assert.Single(facts));
+    }
+
+    [Fact]
+    public void ParseFacts_no_array_yields_empty()
+    {
+        Assert.Empty(ChatClientFactExtractor.ParseFacts("no facts worth remembering"));
+        Assert.Empty(ChatClientFactExtractor.ParseFacts(""));
+    }
+
     [Theory]
     [InlineData("plain prose, no array at all")]
     [InlineData("")]
